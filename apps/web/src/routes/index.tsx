@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { m } from "#/paraglide/messages.js";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -13,6 +14,9 @@ function Home() {
 				<button type="button" className="btn btn-primary">
 					Click me
 				</button>
+			</div>
+			<div className="mt-6">
+				<p>{m.example_message({ username: "User" })}</p>
 			</div>
 		</div>
 	);
