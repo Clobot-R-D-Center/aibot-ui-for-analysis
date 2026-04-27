@@ -1,0 +1,6 @@
+[tools]
+"aqua:pnpm/pnpm" = "10.33.2"
+node = "24"
+
+[env]
+_.path = ['{{config_root}}/node_modules/.bin']
