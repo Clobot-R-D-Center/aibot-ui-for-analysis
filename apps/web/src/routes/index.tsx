@@ -9,6 +9,11 @@ function Home() {
 			<p className="mt-4 text-lg">
 				Edit <code>src/routes/index.tsx</code> to get started.
 			</p>
+			<div className="mt-6">
+				<button type="button" className="btn btn-primary">
+					Click me
+				</button>
+			</div>
 		</div>
 	);
 }
