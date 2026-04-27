@@ -1,0 +1,20 @@
+{
+	"private": true,
+	"scripts": {
+		"build": "turbo run build",
+		"dev": "turbo run dev",
+		"format-and-lint": "biome check .",
+		"format-and-lint:fix": "biome check . --write"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.4.13",
+		"@changesets/cli": "^2.31.0",
+		"@commitlint/cli": "^20.5.2",
+		"@commitlint/config-conventional": "^20.5.0",
+		"lefthook": "^2.1.6",
+		"turbo": "^2.9.6"
+	},
+	"keywords": [],
+	"author": "Jeffrey <jeffrey@clobor.co.kr>",
+	"packageManager": "pnpm@10.33.2"
+}
