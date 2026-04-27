@@ -12,7 +12,8 @@
     "test": "vitest run",
     "format": "biome format",
     "lint": "biome lint",
-    "check": "biome check"
+    "check": "biome check",
+    "machine-translate": "inlang machine translate --project project.inlang"
   },
   "dependencies": {
     "@tailwindcss/vite": "0.0.0-insiders.f3fdda2",
@@ -28,6 +29,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.13",
+    "@inlang/cli": "^3.1.10",
+    "@inlang/paraglide-js": "^2.16.1",
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/devtools-vite": "latest",
     "@tanstack/router-plugin": "latest",
