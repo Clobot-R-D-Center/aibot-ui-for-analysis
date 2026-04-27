@@ -3,4 +3,6 @@ packages:
   - "packages/*"
 
 allowBuilds:
+  esbuild: true
   lefthook: true
+  lightningcss: true
