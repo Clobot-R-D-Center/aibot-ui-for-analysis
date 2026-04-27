@@ -15,11 +15,12 @@
     "check": "biome check"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.2.4",
+    "@tailwindcss/vite": "0.0.0-insiders.f3fdda2",
     "@tanstack/react-devtools": "0.10.2",
     "@tanstack/react-router": "1.168.24",
     "@tanstack/react-router-devtools": "1.166.13",
     "@tanstack/router-plugin": "^1.167.27",
+    "daisyui": "^5.5.19",
     "lucide-react": "^1.11.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
