@@ -48,5 +48,6 @@
   "event_task_done": "작업 완료",
   "event_warning": "경고",
   "event_avoid": "장애물 회피",
-  "event_dock": "충전 도킹"
+  "event_dock": "충전 도킹",
+  "data_error": "데이터를 불러오지 못했습니다"
 }
