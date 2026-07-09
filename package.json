@@ -7,12 +7,12 @@
 		"format-and-lint:fix": "biome check . --write"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.4.13",
+		"@biomejs/biome": "2.5.3",
 		"@changesets/cli": "^2.31.0",
-		"@commitlint/cli": "^20.5.2",
-		"@commitlint/config-conventional": "^20.5.0",
-		"lefthook": "^2.1.6",
-		"turbo": "^2.9.6"
+		"@commitlint/cli": "^21.2.1",
+		"@commitlint/config-conventional": "^21.2.0",
+		"lefthook": "^2.1.10",
+		"turbo": "^2.10.4"
 	},
 	"keywords": [],
 	"author": "Jeffrey <jeffrey@clobor.co.kr>",

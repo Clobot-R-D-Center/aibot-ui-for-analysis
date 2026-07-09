@@ -11,11 +11,6 @@ function Home() {
 				Edit <code>src/routes/index.tsx</code> to get started.
 			</p>
 			<div className="mt-6">
-				<button type="button" className="btn btn-primary">
-					Click me
-				</button>
-			</div>
-			<div className="mt-6">
 				<p>{m.example_message({ username: "User" })}</p>
 			</div>
 		</div>
