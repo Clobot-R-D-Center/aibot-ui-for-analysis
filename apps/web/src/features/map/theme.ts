@@ -1,12 +1,14 @@
 import { useSyncExternalStore } from "react";
 
-// Theme: dark is the working default, light is for export/print (see DESIGN.md).
+// Theme maps to daisyUI themes: light → "winter", dark → "night".
+// Light is the default (product preference).
 export type Theme = "dark" | "light";
 const KEY = "abaui-theme";
+const DAISY = { light: "winter", dark: "night" } as const;
 const listeners = new Set<() => void>();
 
 function apply(t: Theme) {
-	document.documentElement.setAttribute("data-theme", t);
+	document.documentElement.setAttribute("data-theme", DAISY[t]);
 }
 
 /** Call once before first paint to avoid a flash of the wrong theme.
@@ -14,13 +16,13 @@ function apply(t: Theme) {
 export function initTheme() {
 	const param = new URLSearchParams(window.location.search).get("theme");
 	const saved = param ?? localStorage.getItem(KEY);
-	apply(saved === "light" ? "light" : "dark");
+	apply(saved === "dark" ? "dark" : "light");
 }
 
 function current(): Theme {
-	return document.documentElement.getAttribute("data-theme") === "light"
-		? "light"
-		: "dark";
+	return document.documentElement.getAttribute("data-theme") === DAISY.dark
+		? "dark"
+		: "light";
 }
 
 export function setTheme(t: Theme) {
@@ -40,7 +42,7 @@ export function useTheme(): Theme {
 			return () => listeners.delete(cb);
 		},
 		current,
-		() => "dark",
+		() => "light",
 	);
 }
 

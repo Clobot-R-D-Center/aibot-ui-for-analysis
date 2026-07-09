@@ -24,8 +24,7 @@ import { mapWorldRect, type RobotPose } from "./ros-map";
 import { useTheme } from "./theme";
 import { useRosMap } from "./use-ros-map";
 
-const iconBtn =
-	"grid size-9 place-items-center rounded-lg border border-border bg-surface text-muted shadow-sm transition-colors duration-150 hover:border-border-strong hover:text-ink active:translate-y-px";
+const iconBtn = "btn btn-square btn-sm shadow-sm";
 
 function fmt(n: number) {
 	return n.toFixed(2);
@@ -365,7 +364,7 @@ function ErrorOverlay({
 				<button
 					type="button"
 					onClick={onRetry}
-					className="flex h-9 items-center gap-2 rounded-lg bg-accent px-4 font-medium text-accent-ink text-sm transition-opacity hover:opacity-90"
+					className="btn btn-primary btn-sm gap-2"
 				>
 					<RotateCcw className="size-4" />
 					{m.action_retry()}

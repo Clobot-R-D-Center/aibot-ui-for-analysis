@@ -1,106 +1,60 @@
 @import "tailwindcss";
-@plugin "daisyui";
-
-/*
-  AI Bot Analysis Dashboard — design tokens (see DESIGN.md).
-  Restrained cool blue-slate chrome; saturated color is reserved for data.
-  Dark canvas is the working default; light is for export/print.
-  All colors OKLCH. Tokens are the single source of truth — the 3D scene
-  reads the resolved values from the DOM, it does not redefine them.
-*/
-
-:root,
-:root[data-theme="dark"] {
-	color-scheme: dark;
-
-	--canvas: oklch(0.17 0.015 255);
-	--surface: oklch(0.215 0.018 255);
-	--surface-raised: oklch(0.255 0.02 255);
-	--border: oklch(0.32 0.02 255);
-	--border-strong: oklch(0.42 0.025 255);
-
-	--ink: oklch(0.96 0.008 255);
-	--muted: oklch(0.74 0.018 255);
-	--faint: oklch(0.64 0.018 255);
-
-	/* single interactive accent — cool anchor, ≤10% of any screen */
-	--accent: oklch(0.72 0.14 245);
-	--accent-ink: oklch(0.18 0.03 245); /* text on a filled accent */
-	--accent-quiet: oklch(0.72 0.14 245 / 0.16);
-
-	/* themed occupancy map — free floor / structure / unknown */
-	--map-free: oklch(0.315 0.016 255);
-	--map-wall: oklch(0.74 0.03 255);
-	--map-unknown: oklch(0.17 0.015 255 / 0); /* transparent → canvas shows through */
-
-	/* the robot: a warm data color, deliberately outside the cool chrome */
-	--robot: oklch(0.78 0.16 62);
-	--robot-ink: oklch(0.24 0.05 62);
+@plugin "daisyui" {
+	themes: winter --default, night --prefersdark;
 }
 
-:root[data-theme="light"] {
-	color-scheme: light;
+/*
+  Chrome comes from daisyUI's winter (light, default) + night (dark) themes.
+  Our own tokens are only the DOMAIN visualization layer (map + data), plus
+  thin aliases mapping legacy chrome class names onto daisyUI's palette so the
+  existing components pick up the theme. DESIGN.md documents the mapping.
+*/
 
-	--canvas: oklch(0.975 0.004 250);
-	--surface: oklch(1 0 0);
-	--surface-raised: oklch(1 0 0);
-	--border: oklch(0.9 0.006 250);
-	--border-strong: oklch(0.82 0.01 250);
-
-	--ink: oklch(0.26 0.02 255);
-	--muted: oklch(0.46 0.02 255);
-	--faint: oklch(0.5 0.018 255);
-
-	--accent: oklch(0.55 0.16 250);
-	--accent-ink: oklch(0.99 0.004 250);
-	--accent-quiet: oklch(0.55 0.16 250 / 0.12);
-
-	--map-free: oklch(0.995 0.002 250);
-	--map-wall: oklch(0.42 0.03 255);
-	--map-unknown: oklch(0.94 0.004 250 / 0.55);
-
+/* Domain viz tokens — light (winter) defaults, dark (night) overrides.
+   The 3D scene reads these resolved values from the DOM. */
+:root {
+	--map-free: oklch(0.985 0.003 250);
+	--map-wall: oklch(0.45 0.02 255);
+	--map-unknown: oklch(0.9 0.004 250 / 0.5);
 	--robot: oklch(0.66 0.17 55);
 	--robot-ink: oklch(0.99 0.01 55);
 }
 
-/* Colorblind-safe categorical ramp (Okabe–Ito), reserved for data overlays.
-   Not used by chrome. Wired up here so the next slice's layers just reference them. */
-:root {
-	--data-1: oklch(0.7 0.14 42); /* vermilion  */
-	--data-2: oklch(0.72 0.13 200); /* sky blue   */
-	--data-3: oklch(0.78 0.15 150); /* green      */
-	--data-4: oklch(0.82 0.16 95); /* yellow     */
-	--data-5: oklch(0.62 0.18 320); /* purple     */
-	--data-6: oklch(0.68 0.13 25); /* red-orange */
-
-	--font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR",
-		sans-serif;
-	--font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono",
-		"Noto Sans Mono CJK KR", monospace;
-
-	/* semantic z-index scale */
-	--z-canvas: 0;
-	--z-hud: 10;
-	--z-panel: 20;
-	--z-dropdown: 30;
-	--z-toast: 40;
-	--z-tooltip: 50;
+[data-theme="night"] {
+	--map-free: oklch(0.32 0.015 255);
+	--map-wall: oklch(0.74 0.03 255);
+	--map-unknown: oklch(0.2 0.015 255 / 0);
+	--robot: oklch(0.78 0.16 62);
+	--robot-ink: oklch(0.24 0.05 62);
 }
 
-@theme inline {
-	--color-canvas: var(--canvas);
-	--color-surface: var(--surface);
-	--color-surface-raised: var(--surface-raised);
-	--color-border: var(--border);
-	--color-border-strong: var(--border-strong);
-	--color-ink: var(--ink);
-	--color-muted: var(--muted);
-	--color-faint: var(--faint);
-	--color-accent: var(--accent);
-	--color-accent-ink: var(--accent-ink);
-	--color-robot: var(--robot);
+/* Colorblind-safe categorical ramp (Okabe–Ito) for data overlays/series. */
+:root {
+	--data-1: oklch(0.7 0.14 42);
+	--data-2: oklch(0.72 0.13 200);
+	--data-3: oklch(0.78 0.15 150);
+	--data-4: oklch(0.82 0.16 95);
+	--data-5: oklch(0.62 0.18 320);
+	--data-6: oklch(0.68 0.13 25);
 
-	--font-sans: var(--font-sans);
+	--font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono",
+		"Noto Sans Mono CJK KR", monospace;
+}
+
+/* Legacy chrome class names → daisyUI palette. Lets bg-surface / text-ink /
+   border-border / text-accent etc. render in the active daisyUI theme. */
+@theme inline {
+	--color-canvas: var(--color-base-200);
+	--color-surface: var(--color-base-100);
+	--color-surface-raised: var(--color-base-200);
+	--color-border: var(--color-base-300);
+	--color-border-strong: color-mix(in oklch, var(--color-base-content) 25%, var(--color-base-300));
+	--color-ink: var(--color-base-content);
+	--color-muted: color-mix(in oklch, var(--color-base-content) 65%, transparent);
+	--color-faint: color-mix(in oklch, var(--color-base-content) 45%, transparent);
+	--color-accent: var(--color-primary);
+	--color-accent-ink: var(--color-primary-content);
+	--color-robot: var(--robot);
 	--font-mono: var(--font-mono);
 }
 
@@ -111,9 +65,8 @@ body {
 
 body {
 	margin: 0;
-	background: var(--canvas);
-	color: var(--ink);
-	font-family: var(--font-sans);
+	background: var(--color-base-200);
+	color: var(--color-base-content);
 	-webkit-font-smoothing: antialiased;
 	text-rendering: optimizeLegibility;
 }
@@ -126,12 +79,6 @@ body {
 .tnum {
 	font-variant-numeric: tabular-nums;
 	font-family: var(--font-mono);
-}
-
-:where(button, a, input, [tabindex]):focus-visible {
-	outline: 2px solid var(--accent);
-	outline-offset: 2px;
-	border-radius: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {

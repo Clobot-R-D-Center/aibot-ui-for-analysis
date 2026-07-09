@@ -8,7 +8,7 @@ interface Props {
 	bodyClassName?: string;
 }
 
-/** The one card level in the shell. Swappable content slot; never nest Panels. */
+/** daisyUI card with an optional divided header. Never nest cards. */
 export function Panel({
 	title,
 	action,
@@ -18,17 +18,19 @@ export function Panel({
 }: Props) {
 	return (
 		<section
-			className={`flex flex-col rounded-xl border border-border bg-surface shadow-sm ${className ?? ""}`}
+			className={`card card-border border-base-300 bg-base-100 shadow-sm ${className ?? ""}`}
 		>
 			{(title || action) && (
-				<header className="flex items-center justify-between gap-3 border-border border-b px-4 py-3">
-					{title && <h2 className="font-medium text-ink text-sm">{title}</h2>}
+				<header className="flex items-center justify-between gap-3 border-base-300 border-b px-4 py-3">
+					{title && (
+						<h2 className="card-title font-medium text-base-content text-sm">
+							{title}
+						</h2>
+					)}
 					{action}
 				</header>
 			)}
-			<div className={`min-h-0 flex-1 ${bodyClassName ?? "p-4"}`}>
-				{children}
-			</div>
+			<div className={bodyClassName ?? "p-4"}>{children}</div>
 		</section>
 	);
 }

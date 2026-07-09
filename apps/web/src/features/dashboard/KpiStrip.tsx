@@ -17,24 +17,20 @@ function fmt(v: number) {
 
 export function KpiStrip({ kpis }: { kpis: Kpi[] }) {
 	return (
-		<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+		<div className="stats stats-vertical w-full border border-base-300 bg-base-100 shadow-sm sm:stats-horizontal">
 			{kpis.map((k) => {
 				const up = k.delta >= 0;
 				return (
-					<div
-						key={k.key}
-						className="rounded-xl border border-border bg-surface px-4 py-3.5 shadow-sm"
-					>
-						<div className="text-muted text-xs">{label(k.key)}</div>
-						<div className="mt-1.5 flex items-baseline gap-1">
-							<span className="tnum font-semibold text-2xl text-ink tabular-nums">
-								{fmt(k.value)}
+					<div className="stat" key={k.key}>
+						<div className="stat-title text-xs">{label(k.key)}</div>
+						<div className="stat-value flex items-baseline gap-1 font-semibold text-2xl text-base-content">
+							<span className="tnum tabular-nums">{fmt(k.value)}</span>
+							<span className="font-normal text-base-content/50 text-sm">
+								{k.unit}
 							</span>
-							<span className="text-faint text-sm">{k.unit}</span>
 						</div>
 						<div
-							className="mt-1 flex items-center gap-1 text-xs"
-							style={{ color: up ? "var(--data-3)" : "var(--data-1)" }}
+							className={`stat-desc mt-1 flex items-center gap-1 ${up ? "text-success" : "text-error"}`}
 						>
 							{up ? (
 								<TrendingUp className="size-3.5" aria-hidden />
