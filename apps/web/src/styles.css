@@ -41,19 +41,42 @@
 		"Noto Sans Mono CJK KR", monospace;
 }
 
-/* Legacy chrome class names → daisyUI palette. Lets bg-surface / text-ink /
-   border-border / text-accent etc. render in the active daisyUI theme. */
+/*
+  Raw color aliases onto the daisyUI palette. These MUST be real :root custom
+  properties (not @theme) because inline styles and SVG presentation attributes
+  (stroke/fill) read them directly as var(--faint) etc. — @theme inline only
+  feeds utility classes and does NOT emit runtime :root vars, so those usages
+  would otherwise be undefined and fall back (black text, unpainted strokes).
+  NB: --border is daisyUI's border-WIDTH token, so the divider COLOR is --divider.
+*/
+:root {
+	--canvas: var(--color-base-200);
+	--surface: var(--color-base-100);
+	--surface-raised: var(--color-base-200);
+	--divider: var(--color-base-300);
+	--border-strong: color-mix(in oklch, var(--color-base-content) 25%, var(--color-base-300));
+	--ink: var(--color-base-content);
+	--muted: color-mix(in oklch, var(--color-base-content) 65%, transparent);
+	--faint: color-mix(in oklch, var(--color-base-content) 45%, transparent);
+	--accent: var(--color-primary);
+	--accent-ink: var(--color-primary-content);
+	--accent-quiet: color-mix(in oklch, var(--color-primary) 16%, transparent);
+}
+
+/* Legacy chrome class names → daisyUI palette (utilities), via the aliases above.
+   Lets bg-surface / text-ink / border-border / text-accent render in-theme. */
 @theme inline {
-	--color-canvas: var(--color-base-200);
-	--color-surface: var(--color-base-100);
-	--color-surface-raised: var(--color-base-200);
-	--color-border: var(--color-base-300);
-	--color-border-strong: color-mix(in oklch, var(--color-base-content) 25%, var(--color-base-300));
-	--color-ink: var(--color-base-content);
-	--color-muted: color-mix(in oklch, var(--color-base-content) 65%, transparent);
-	--color-faint: color-mix(in oklch, var(--color-base-content) 45%, transparent);
-	--color-accent: var(--color-primary);
-	--color-accent-ink: var(--color-primary-content);
+	--color-canvas: var(--canvas);
+	--color-surface: var(--surface);
+	--color-surface-raised: var(--surface-raised);
+	--color-border: var(--divider);
+	--color-border-strong: var(--border-strong);
+	--color-ink: var(--ink);
+	--color-muted: var(--muted);
+	--color-faint: var(--faint);
+	--color-accent: var(--accent);
+	--color-accent-ink: var(--accent-ink);
+	--color-accent-quiet: var(--accent-quiet);
 	--color-robot: var(--robot);
 	--font-mono: var(--font-mono);
 }

@@ -33,6 +33,12 @@ describe("parseMapYaml", () => {
 			/resolution/,
 		);
 	});
+
+	it("rejects a non-zero origin yaw (unsupported)", () => {
+		expect(() =>
+			parseMapYaml("image: m.png\nresolution: 0.05\norigin: [0, 0, 1.57]"),
+		).toThrow(/yaw/);
+	});
 });
 
 describe("classifyPixel (negate=0: white=free)", () => {

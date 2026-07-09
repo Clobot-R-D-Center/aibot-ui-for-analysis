@@ -47,6 +47,10 @@ export function parseMapYaml(text: string): RosMapMeta {
 		: [0, 0, 0];
 	if (origin.length < 2 || origin.some((n) => !Number.isFinite(n)))
 		throw new Error("map.yaml: 'origin' must be [x, y, yaw]");
+	// The plane is rendered axis-aligned; a rotated origin would put the map,
+	// pose, and overlays in the wrong world frame. Reject until yaw is handled.
+	if (Math.abs(origin[2] ?? 0) > 1e-3)
+		throw new Error("map.yaml: non-zero origin yaw is not supported");
 
 	return {
 		image,
