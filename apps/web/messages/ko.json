@@ -1,4 +1,26 @@
 {
-	"$schema": "https://inlang.com/schema/inlang-message-format",
-	"example_message": "안녕하세요 {username}"
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "example_message": "안녕하세요 {username}",
+  "app_name": "AI Bot 분석",
+  "view_map": "맵 캔버스",
+  "demo_badge": "데모 맵",
+  "map_loading": "맵을 불러오는 중",
+  "map_error_title": "맵을 불러오지 못했습니다",
+  "map_error_hint": "map.yaml 과 이미지 파일에 접근할 수 있는지 확인하세요.",
+  "action_retry": "다시 시도",
+  "action_reset_view": "화면 초기화",
+  "action_zoom_in": "확대",
+  "action_zoom_out": "축소",
+  "action_theme_light": "라이트 테마로 전환",
+  "action_theme_dark": "다크 테마로 전환",
+  "legend_title": "레이어",
+  "legend_free": "이동 가능 공간",
+  "legend_wall": "벽",
+  "legend_unknown": "미확인",
+  "legend_robot": "로봇",
+  "readout_cursor": "커서",
+  "readout_robot": "로봇",
+  "readout_resolution": "해상도",
+  "readout_offmap": "맵 밖",
+  "unit_mpp": "m/px"
 }
