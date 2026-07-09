@@ -152,7 +152,8 @@ const TOGGLES: Array<{
 			<span
 				className="h-3 w-3.5 rounded-sm"
 				style={{
-					background: "linear-gradient(90deg, transparent, var(--data-5))",
+					background:
+						"linear-gradient(90deg, #440154, #21918c, #5ec962, #fde725)",
 				}}
 				aria-hidden
 			/>
