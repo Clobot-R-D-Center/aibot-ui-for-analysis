@@ -1,6 +1,5 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { MapPanel } from "#/features/map/MapPanel";
-import { getOverlays } from "#/features/map/overlays/overlay-data";
 import { m } from "#/paraglide/messages.js";
 import { getRobotData, type RangeDays, ROBOTS } from "./demo-data";
 import { EventLog } from "./EventLog";
@@ -15,7 +14,6 @@ export function DashboardShell() {
 	const [robotId, setRobotId] = useState(ROBOTS[0].id);
 	const [range, setRange] = useState<RangeDays>(7);
 	const data = getRobotData(robotId, range);
-	const overlays = useMemo(() => getOverlays(robotId), [robotId]);
 
 	const lastDistance = data.distance.at(-1)?.value ?? 0;
 	const lastSuccess = data.success.at(-1)?.value ?? 0;
@@ -36,7 +34,7 @@ export function DashboardShell() {
 
 					{/* Map hero — its own bordered panel, fills a tall band above the fold */}
 					<div className="h-[60vh] min-h-[380px]">
-						<MapPanel src={MAP_SRC} pose={data.pose} overlays={overlays} />
+						<MapPanel src={MAP_SRC} robotId={robotId} />
 					</div>
 
 					{/* Trends — scroll down for detail */}
