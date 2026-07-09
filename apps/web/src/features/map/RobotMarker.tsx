@@ -38,7 +38,7 @@ export function RobotMarker({
 	return (
 		<group position={[pose.x, pose.y, Z]} rotation={[0, 0, pose.theta]}>
 			{/* soft halo ring — draws attention without motion */}
-			<mesh renderOrder={2}>
+			<mesh renderOrder={10}>
 				<ringGeometry args={[0.36, 0.5, 48]} />
 				<meshBasicMaterial
 					color={body}
@@ -50,7 +50,7 @@ export function RobotMarker({
 				/>
 			</mesh>
 			{/* body disc */}
-			<mesh renderOrder={3}>
+			<mesh renderOrder={11}>
 				<circleGeometry args={[0.3, 48]} />
 				<meshBasicMaterial
 					color={body}
@@ -61,7 +61,7 @@ export function RobotMarker({
 				/>
 			</mesh>
 			{/* heading chevron */}
-			<mesh geometry={chevron} renderOrder={4} position={[0, 0, 0.001]}>
+			<mesh geometry={chevron} renderOrder={12} position={[0, 0, 0.001]}>
 				<meshBasicMaterial
 					color={ink}
 					transparent

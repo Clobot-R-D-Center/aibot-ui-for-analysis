@@ -2,6 +2,10 @@ import { MapControls, OrthographicCamera } from "@react-three/drei";
 import { type ThreeEvent, useThree } from "@react-three/fiber";
 import { type RefObject, useCallback, useEffect, useMemo, useRef } from "react";
 import { OccupancyLayer } from "./OccupancyLayer";
+import { HeatmapLayer } from "./overlays/HeatmapLayer";
+import type { LayerVisibility, Overlays } from "./overlays/overlay-data";
+import { PathLayer } from "./overlays/PathLayer";
+import { ZonesLayer } from "./overlays/ZonesLayer";
 import { RobotMarker } from "./RobotMarker";
 import { mapWorldRect, type RobotPose } from "./ros-map";
 import type { Theme } from "./theme";
@@ -81,11 +85,21 @@ interface Props {
 	map: LoadedMap;
 	pose: RobotPose;
 	theme: Theme;
+	overlays: Overlays;
+	layers: LayerVisibility;
 	apiRef: RefObject<ViewApi | null>;
 	onCursor: (world: { x: number; y: number } | null) => void;
 }
 
-export function MapScene({ map, pose, theme, apiRef, onCursor }: Props) {
+export function MapScene({
+	map,
+	pose,
+	theme,
+	overlays,
+	layers,
+	apiRef,
+	onCursor,
+}: Props) {
 	// Stable across re-renders (e.g. cursor moves) so the view doesn't re-fit
 	// and snap back while the user is panning; only changes on map/size change.
 	const rect = useMemo(
@@ -94,8 +108,9 @@ export function MapScene({ map, pose, theme, apiRef, onCursor }: Props) {
 	);
 	const invalidate = useThree((s) => s.invalidate);
 
-	// Re-render once when the themed texture is rebuilt (demand frameloop).
-	useEffect(() => invalidate(), [invalidate]);
+	// Re-render on any visual change (demand frameloop): theme, pose, layers.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: these are the change triggers
+	useEffect(() => invalidate(), [invalidate, theme, pose, layers, overlays]);
 
 	// Stable array refs so r3f/drei apply them once, never re-applying (and
 	// snapping the camera back) on later re-renders.
@@ -137,7 +152,18 @@ export function MapScene({ map, pose, theme, apiRef, onCursor }: Props) {
 				onPointerMove={handleMove}
 				onPointerOut={() => onCursor(null)}
 			/>
-			<RobotMarker pose={pose} theme={theme} />
+			{layers.heatmap && (
+				<HeatmapLayer
+					heat={overlays.heat}
+					meta={map.meta}
+					widthPx={map.widthPx}
+					heightPx={map.heightPx}
+					theme={theme}
+				/>
+			)}
+			{layers.zones && <ZonesLayer zones={overlays.zones} theme={theme} />}
+			{layers.path && <PathLayer path={overlays.path} theme={theme} />}
+			{layers.robot && <RobotMarker pose={pose} theme={theme} />}
 		</>
 	);
 }
