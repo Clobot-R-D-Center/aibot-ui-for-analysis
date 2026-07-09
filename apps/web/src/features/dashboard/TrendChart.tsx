@@ -75,7 +75,7 @@ export function TrendChart({ points, color, unit, height = 168 }: Props) {
 								x2={w - PAD.r}
 								y1={y(gv)}
 								y2={y(gv)}
-								stroke="var(--border)"
+								stroke="var(--divider)"
 								strokeWidth={1}
 							/>
 							<text
