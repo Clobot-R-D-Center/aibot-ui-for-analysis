@@ -2,6 +2,8 @@ import { Canvas } from "@react-three/fiber";
 import {
 	Bot,
 	Crosshair,
+	Eye,
+	EyeOff,
 	Maximize,
 	Minus,
 	Plus,
@@ -11,6 +13,12 @@ import {
 import { type ReactNode, useRef, useState } from "react";
 import { m } from "#/paraglide/messages.js";
 import { MapScene, type ViewApi } from "./MapScene";
+import {
+	DEFAULT_LAYERS,
+	type LayerKey,
+	type LayerVisibility,
+	type Overlays,
+} from "./overlays/overlay-data";
 import type { RobotPose } from "./ros-map";
 import { useTheme } from "./theme";
 import { useRosMap } from "./use-ros-map";
@@ -28,14 +36,17 @@ function deg(rad: number) {
 interface Props {
 	src: string;
 	pose: RobotPose;
+	overlays: Overlays;
 }
 
-export function MapPanel({ src, pose }: Props) {
+export function MapPanel({ src, pose, overlays }: Props) {
 	const theme = useTheme();
 	const [nonce, setNonce] = useState(0);
 	const state = useRosMap(src, nonce);
 	const apiRef = useRef<ViewApi | null>(null);
 	const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
+	const [layers, setLayers] = useState<LayerVisibility>(DEFAULT_LAYERS);
+	const toggle = (k: LayerKey) => setLayers((l) => ({ ...l, [k]: !l[k] }));
 
 	return (
 		<div className="relative h-full w-full overflow-hidden rounded-xl border border-border bg-canvas text-ink">
@@ -51,6 +62,8 @@ export function MapPanel({ src, pose }: Props) {
 						map={state.map}
 						pose={pose}
 						theme={theme}
+						overlays={overlays}
+						layers={layers}
 						apiRef={apiRef}
 						onCursor={setCursor}
 					/>
@@ -59,7 +72,7 @@ export function MapPanel({ src, pose }: Props) {
 
 			{state.status === "ready" && (
 				<>
-					<Legend />
+					<LayersPanel layers={layers} onToggle={toggle} />
 					<Readout
 						cursor={cursor}
 						pose={pose}
@@ -105,51 +118,117 @@ export function MapPanel({ src, pose }: Props) {
 	);
 }
 
-function Legend() {
-	const rows: Array<{ key: string; label: string; swatch: ReactNode }> = [
-		{
-			key: "free",
-			label: m.legend_free(),
-			swatch: <Swatch varName="--map-free" />,
-		},
-		{
-			key: "wall",
-			label: m.legend_wall(),
-			swatch: <Swatch varName="--map-wall" />,
-		},
-		{
-			key: "unknown",
-			label: m.legend_unknown(),
-			swatch: <Swatch varName="--map-unknown" hatched />,
-		},
-		{
-			key: "robot",
-			label: m.legend_robot(),
-			swatch: (
-				<span
-					className="size-3.5 rounded-full"
-					style={{ background: "var(--robot)" }}
-					aria-hidden
-				/>
-			),
-		},
-	];
+const TOGGLES: Array<{
+	key: LayerKey;
+	label: () => string;
+	swatch: ReactNode;
+}> = [
+	{
+		key: "robot",
+		label: () => m.legend_robot(),
+		swatch: (
+			<span
+				className="size-3 rounded-full"
+				style={{ background: "var(--robot)" }}
+				aria-hidden
+			/>
+		),
+	},
+	{
+		key: "path",
+		label: () => m.legend_path(),
+		swatch: (
+			<span
+				className="h-0.5 w-3.5 rounded-full"
+				style={{ background: "var(--data-2)" }}
+				aria-hidden
+			/>
+		),
+	},
+	{
+		key: "heatmap",
+		label: () => m.legend_heatmap(),
+		swatch: (
+			<span
+				className="h-3 w-3.5 rounded-sm"
+				style={{
+					background: "linear-gradient(90deg, transparent, var(--data-5))",
+				}}
+				aria-hidden
+			/>
+		),
+	},
+	{
+		key: "zones",
+		label: () => m.legend_zones(),
+		swatch: (
+			<span
+				className="size-3.5 rounded-sm border"
+				style={{
+					borderColor: "var(--data-4)",
+					background: "color-mix(in oklch, var(--data-4) 16%, transparent)",
+				}}
+				aria-hidden
+			/>
+		),
+	},
+];
+
+function LayersPanel({
+	layers,
+	onToggle,
+}: {
+	layers: LayerVisibility;
+	onToggle: (k: LayerKey) => void;
+}) {
 	return (
-		<div className="absolute top-20 right-4 z-10 w-max rounded-lg border border-border bg-surface p-3 shadow-sm">
-			<h2 className="mb-2 font-medium text-faint text-xs uppercase tracking-wide">
+		<div className="absolute top-4 right-4 z-10 w-44 rounded-lg border border-border bg-surface p-2.5 shadow-sm">
+			<h2 className="mb-1.5 px-1.5 font-medium text-faint text-xs uppercase tracking-wide">
 				{m.legend_title()}
 			</h2>
-			<ul className="flex flex-col gap-1.5">
-				{rows.map((r) => (
-					<li
-						key={r.key}
-						className="flex items-center gap-2.5 text-ink text-sm"
-					>
-						{r.swatch}
-						{r.label}
-					</li>
-				))}
+			<ul className="flex flex-col gap-0.5">
+				{TOGGLES.map((t) => {
+					const on = layers[t.key];
+					return (
+						<li key={t.key}>
+							<button
+								type="button"
+								onClick={() => onToggle(t.key)}
+								aria-pressed={on}
+								className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-1 text-left text-sm transition-colors hover:bg-surface-raised"
+							>
+								<span className="grid w-3.5 place-items-center">
+									{t.swatch}
+								</span>
+								<span className={on ? "text-ink" : "text-faint"}>
+									{t.label()}
+								</span>
+								{on ? (
+									<Eye className="ml-auto size-3.5 text-muted" aria-hidden />
+								) : (
+									<EyeOff className="ml-auto size-3.5 text-faint" aria-hidden />
+								)}
+							</button>
+						</li>
+					);
+				})}
 			</ul>
+			<div className="mt-2 border-border/70 border-t pt-2">
+				<div className="mb-1 px-1.5 text-[10px] text-faint uppercase tracking-wide">
+					{m.legend_basemap()}
+				</div>
+				<ul className="flex flex-col gap-1 px-1.5">
+					<li className="flex items-center gap-2.5 text-muted text-xs">
+						<Swatch varName="--map-free" /> {m.legend_free()}
+					</li>
+					<li className="flex items-center gap-2.5 text-muted text-xs">
+						<Swatch varName="--map-wall" /> {m.legend_wall()}
+					</li>
+					<li className="flex items-center gap-2.5 text-muted text-xs">
+						<Swatch varName="--map-unknown" hatched /> {m.legend_unknown()}
+					</li>
+				</ul>
+			</div>
 		</div>
 	);
 }
