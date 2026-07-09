@@ -6,10 +6,12 @@
     "#/*": "./src/*"
   },
   "scripts": {
+    "compile": "paraglide-js compile",
     "dev": "vite dev --port 3000",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "paraglide-js compile && vitest run",
+    "check-types": "paraglide-js compile && tsc --noEmit",
     "format": "biome format",
     "lint": "biome lint",
     "check": "biome check",

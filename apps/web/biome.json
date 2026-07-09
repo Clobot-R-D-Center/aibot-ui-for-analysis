@@ -1,9 +1,9 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
-  "root": false,
-  "extends": "//",
+	"$schema": "https://biomejs.dev/schemas/2.5.3/schema.json",
+	"root": false,
+	"extends": "//",
 	"files": {
-    "ignoreUnknown": false,
+		"ignoreUnknown": false,
 		"includes": [
 			"**/src/**/*",
 			"**/index.html",
