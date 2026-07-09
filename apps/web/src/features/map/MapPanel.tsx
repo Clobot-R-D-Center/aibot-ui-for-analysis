@@ -2,20 +2,17 @@ import { Canvas } from "@react-three/fiber";
 import {
 	Bot,
 	Crosshair,
-	MapPin,
 	Maximize,
 	Minus,
-	Moon,
 	Plus,
 	RotateCcw,
-	Sun,
 	TriangleAlert,
 } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
 import { m } from "#/paraglide/messages.js";
 import { MapScene, type ViewApi } from "./MapScene";
 import type { RobotPose } from "./ros-map";
-import { toggleTheme, useTheme } from "./theme";
+import { useTheme } from "./theme";
 import { useRosMap } from "./use-ros-map";
 
 const iconBtn =
@@ -33,7 +30,7 @@ interface Props {
 	pose: RobotPose;
 }
 
-export function MapViewport({ src, pose }: Props) {
+export function MapPanel({ src, pose }: Props) {
 	const theme = useTheme();
 	const [nonce, setNonce] = useState(0);
 	const state = useRosMap(src, nonce);
@@ -41,7 +38,7 @@ export function MapViewport({ src, pose }: Props) {
 	const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
 
 	return (
-		<div className="relative h-[100dvh] w-full overflow-hidden bg-canvas text-ink">
+		<div className="relative h-full w-full overflow-hidden rounded-xl border border-border bg-canvas text-ink">
 			{state.status === "ready" && (
 				<Canvas
 					flat
@@ -59,40 +56,6 @@ export function MapViewport({ src, pose }: Props) {
 					/>
 				</Canvas>
 			)}
-
-			{/* Top bar */}
-			<header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-3 p-4">
-				<div className="pointer-events-auto flex min-w-0 items-center gap-2">
-					<div className="flex h-9 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-surface px-3 shadow-sm">
-						<MapPin className="size-4 shrink-0 text-accent" aria-hidden />
-						<span className="font-medium text-sm">{m.app_name()}</span>
-						<span className="hidden text-faint sm:inline" aria-hidden>
-							/
-						</span>
-						<span className="hidden text-muted text-sm sm:inline">
-							{m.view_map()}
-						</span>
-					</div>
-					<span className="hidden h-9 items-center whitespace-nowrap rounded-lg border border-border bg-surface px-2.5 text-muted text-xs shadow-sm sm:flex">
-						{m.demo_badge()}
-					</span>
-				</div>
-
-				<button
-					type="button"
-					onClick={toggleTheme}
-					className={`pointer-events-auto shrink-0 ${iconBtn}`}
-					aria-label={
-						theme === "dark" ? m.action_theme_light() : m.action_theme_dark()
-					}
-				>
-					{theme === "dark" ? (
-						<Sun className="size-4" />
-					) : (
-						<Moon className="size-4" />
-					)}
-				</button>
-			</header>
 
 			{state.status === "ready" && (
 				<>
