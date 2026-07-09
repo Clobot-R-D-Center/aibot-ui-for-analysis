@@ -1,22 +1,25 @@
 import { useState } from "react";
 import { MapPanel } from "#/features/map/MapPanel";
 import { m } from "#/paraglide/messages.js";
-import { getRobotData, type RangeDays, ROBOTS } from "./demo-data";
+import { AsyncContent } from "./AsyncContent";
+import { type RangeDays, ROBOTS } from "./demo-data";
 import { EventLog } from "./EventLog";
 import { KpiStrip } from "./KpiStrip";
 import { Panel } from "./Panel";
 import { TopBar } from "./TopBar";
 import { TrendChart } from "./TrendChart";
+import { useRobotData } from "./use-robot-data";
 
 const MAP_SRC = "/demo-map";
 
 export function DashboardShell() {
 	const [robotId, setRobotId] = useState(ROBOTS[0].id);
 	const [range, setRange] = useState<RangeDays>(7);
-	const data = getRobotData(robotId, range);
+	const { state, retry } = useRobotData(robotId, range);
 
-	const lastDistance = data.distance.at(-1)?.value ?? 0;
-	const lastSuccess = data.success.at(-1)?.value ?? 0;
+	const ready = state.status === "ready" ? state.data : null;
+	const lastDistance = ready?.distance.at(-1)?.value ?? 0;
+	const lastSuccess = ready?.success.at(-1)?.value ?? 0;
 
 	return (
 		<div className="flex h-[100dvh] flex-col bg-canvas text-ink">
@@ -30,7 +33,13 @@ export function DashboardShell() {
 
 			<main className="min-h-0 flex-1 overflow-y-auto">
 				<div className="mx-auto flex max-w-[1600px] flex-col gap-4 p-4">
-					<KpiStrip kpis={data.kpis} />
+					<AsyncContent
+						state={state}
+						onRetry={retry}
+						skeleton={<KpiSkeleton />}
+					>
+						{(data) => <KpiStrip kpis={data.kpis} />}
+					</AsyncContent>
 
 					{/* Map hero — its own bordered panel, fills a tall band above the fold */}
 					<div className="h-[60vh] min-h-[380px]">
@@ -42,38 +51,92 @@ export function DashboardShell() {
 						<Panel
 							title={m.chart_distance()}
 							action={
-								<span className="tnum text-ink text-sm tabular-nums">
-									{lastDistance} <span className="text-faint">km</span>
-								</span>
+								ready ? (
+									<span className="tnum text-ink text-sm tabular-nums">
+										{lastDistance} <span className="text-faint">km</span>
+									</span>
+								) : undefined
 							}
 						>
-							<TrendChart
-								points={data.distance}
-								color="var(--data-2)"
-								unit="km"
-							/>
+							<AsyncContent
+								state={state}
+								onRetry={retry}
+								skeleton={<ChartSkeleton />}
+							>
+								{(data) => (
+									<TrendChart
+										points={data.distance}
+										color="var(--data-2)"
+										unit="km"
+									/>
+								)}
+							</AsyncContent>
 						</Panel>
 						<Panel
 							title={m.chart_success()}
 							action={
-								<span className="tnum text-ink text-sm tabular-nums">
-									{lastSuccess} <span className="text-faint">%</span>
-								</span>
+								ready ? (
+									<span className="tnum text-ink text-sm tabular-nums">
+										{lastSuccess} <span className="text-faint">%</span>
+									</span>
+								) : undefined
 							}
 						>
-							<TrendChart
-								points={data.success}
-								color="var(--data-3)"
-								unit="%"
-							/>
+							<AsyncContent
+								state={state}
+								onRetry={retry}
+								skeleton={<ChartSkeleton />}
+							>
+								{(data) => (
+									<TrendChart
+										points={data.success}
+										color="var(--data-3)"
+										unit="%"
+									/>
+								)}
+							</AsyncContent>
 						</Panel>
 					</div>
 
 					<Panel title={m.panel_events()}>
-						<EventLog events={data.events} />
+						<AsyncContent
+							state={state}
+							onRetry={retry}
+							skeleton={<ListSkeleton />}
+						>
+							{(data) => <EventLog events={data.events} />}
+						</AsyncContent>
 					</Panel>
 				</div>
 			</main>
+		</div>
+	);
+}
+
+function KpiSkeleton() {
+	return (
+		<div className="stats stats-vertical w-full border border-base-300 bg-base-100 shadow-sm sm:stats-horizontal">
+			{["coverage", "distance", "success", "uptime"].map((k) => (
+				<div className="stat gap-2" key={k}>
+					<div className="skeleton h-3 w-20" />
+					<div className="skeleton h-7 w-24" />
+					<div className="skeleton h-3 w-16" />
+				</div>
+			))}
+		</div>
+	);
+}
+
+function ChartSkeleton() {
+	return <div className="skeleton h-[168px] w-full" />;
+}
+
+function ListSkeleton() {
+	return (
+		<div className="flex flex-col gap-2.5">
+			{["a", "b", "c", "d", "e"].map((k) => (
+				<div className="skeleton h-11 w-full" key={k} />
+			))}
 		</div>
 	);
 }

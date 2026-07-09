@@ -48,5 +48,6 @@
   "event_task_done": "Task completed",
   "event_warning": "Warning",
   "event_avoid": "Obstacle avoided",
-  "event_dock": "Docked"
+  "event_dock": "Docked",
+  "data_error": "Couldn't load data"
 }

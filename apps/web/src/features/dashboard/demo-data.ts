@@ -57,6 +57,12 @@ export interface RobotData {
 	events: RobotEvent[];
 }
 
+/** The data boundary: every panel renders off one of these. Mirrors MapState. */
+export type AsyncState<T> =
+	| { status: "loading" }
+	| { status: "error"; message: string }
+	| { status: "ready"; data: T };
+
 // deterministic pseudo-noise in [0,1) from two integer seeds
 function noise(a: number, b: number): number {
 	const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
@@ -145,4 +151,23 @@ export function getRobotData(robotId: string, days: RangeDays): RobotData {
 		})),
 		events,
 	};
+}
+
+/**
+ * The async seam real fetch/websocket data plugs into. The demo build resolves
+ * the deterministic mock after a short delay so the loading states are visible.
+ */
+export function fetchRobotData(
+	robotId: string,
+	days: RangeDays,
+	signal?: AbortSignal,
+): Promise<RobotData> {
+	return new Promise((resolve, reject) => {
+		// ponytail: demo latency only — a real data source replaces this whole body.
+		const id = setTimeout(() => resolve(getRobotData(robotId, days)), 350);
+		signal?.addEventListener("abort", () => {
+			clearTimeout(id);
+			reject(new DOMException("aborted", "AbortError"));
+		});
+	});
 }
