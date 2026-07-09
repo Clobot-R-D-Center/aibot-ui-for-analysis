@@ -158,7 +158,6 @@ export function MapScene({
 					meta={map.meta}
 					widthPx={map.widthPx}
 					heightPx={map.heightPx}
-					theme={theme}
 				/>
 			)}
 			{layers.zones && <ZonesLayer zones={overlays.zones} theme={theme} />}

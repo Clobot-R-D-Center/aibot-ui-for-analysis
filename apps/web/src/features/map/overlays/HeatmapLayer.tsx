@@ -1,35 +1,55 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { mapWorldRect, type RosMapMeta } from "../ros-map";
-import { resolveColor, type Theme } from "../theme";
 import type { HeatGrid } from "./overlay-data";
+
+// Viridis control points (sRGB) — perceptually-uniform, colorblind-safe.
+const VIRIDIS: Array<[number, number, number]> = [
+	[68, 1, 84],
+	[59, 82, 139],
+	[33, 145, 140],
+	[94, 201, 98],
+	[253, 231, 37],
+];
+
+function viridis(t: number): [number, number, number] {
+	const c = Math.min(1, Math.max(0, t)) * (VIRIDIS.length - 1);
+	const i = Math.min(VIRIDIS.length - 2, Math.floor(c));
+	const f = c - i;
+	const a = VIRIDIS[i];
+	const b = VIRIDIS[i + 1];
+	return [
+		a[0] + (b[0] - a[0]) * f,
+		a[1] + (b[1] - a[1]) * f,
+		a[2] + (b[2] - a[2]) * f,
+	];
+}
 
 interface Props {
 	heat: HeatGrid;
 	meta: RosMapMeta;
 	widthPx: number;
 	heightPx: number;
-	theme: Theme;
 }
 
-/** Coverage heatmap: single-hue sequential ramp encoded as alpha over the map. */
-export function HeatmapLayer({ heat, meta, widthPx, heightPx, theme }: Props) {
+/** Coverage heatmap: intensity encoded as a viridis ramp; alpha fades out where uncovered. */
+export function HeatmapLayer({ heat, meta, widthPx, heightPx }: Props) {
 	const rect = useMemo(
 		() => mapWorldRect(meta, widthPx, heightPx),
 		[meta, widthPx, heightPx],
 	);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: theme drives the recolor
 	const texture = useMemo(() => {
 		const { cols, rows, data } = heat;
-		const base = resolveColor("var(--data-5)");
-		const [r, g, b] = base.rgb.map((v) => Math.round(v * 255));
 		const rgba = new Uint8Array(cols * rows * 4);
 		for (let i = 0; i < cols * rows; i++) {
+			const t = data[i];
+			const [r, g, b] = viridis(t);
 			rgba[i * 4] = r;
 			rgba[i * 4 + 1] = g;
 			rgba[i * 4 + 2] = b;
-			rgba[i * 4 + 3] = Math.round(Math.min(1, data[i] * 1.15) * 185);
+			// fade out low-coverage so the map shows through
+			rgba[i * 4 + 3] = Math.round(Math.min(1, t * 1.25) ** 0.85 * 216);
 		}
 		const tex = new THREE.DataTexture(rgba, cols, rows, THREE.RGBAFormat);
 		tex.magFilter = THREE.LinearFilter;
@@ -37,7 +57,7 @@ export function HeatmapLayer({ heat, meta, widthPx, heightPx, theme }: Props) {
 		tex.colorSpace = THREE.SRGBColorSpace;
 		tex.needsUpdate = true;
 		return tex;
-	}, [heat, theme]);
+	}, [heat]);
 
 	useEffect(() => () => texture.dispose(), [texture]);
 
