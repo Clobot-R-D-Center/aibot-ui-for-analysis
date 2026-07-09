@@ -10,16 +10,17 @@ import {
 	RotateCcw,
 	TriangleAlert,
 } from "lucide-react";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import { m } from "#/paraglide/messages.js";
 import { MapScene, type ViewApi } from "./MapScene";
 import {
 	DEFAULT_LAYERS,
+	getDemoPose,
+	getOverlays,
 	type LayerKey,
 	type LayerVisibility,
-	type Overlays,
 } from "./overlays/overlay-data";
-import type { RobotPose } from "./ros-map";
+import { mapWorldRect, type RobotPose } from "./ros-map";
 import { useTheme } from "./theme";
 import { useRosMap } from "./use-ros-map";
 
@@ -35,11 +36,11 @@ function deg(rad: number) {
 
 interface Props {
 	src: string;
-	pose: RobotPose;
-	overlays: Overlays;
+	/** seeds the demo pose + overlays (real spatial data replaces these later) */
+	robotId: string;
 }
 
-export function MapPanel({ src, pose, overlays }: Props) {
+export function MapPanel({ src, robotId }: Props) {
 	const theme = useTheme();
 	const [nonce, setNonce] = useState(0);
 	const state = useRosMap(src, nonce);
@@ -48,9 +49,27 @@ export function MapPanel({ src, pose, overlays }: Props) {
 	const [layers, setLayers] = useState<LayerVisibility>(DEFAULT_LAYERS);
 	const toggle = (k: LayerKey) => setLayers((l) => ({ ...l, [k]: !l[k] }));
 
+	// Demo pose + overlays sized to the LOADED map's world bounds, so they land
+	// sensibly on whatever map is loaded (not the old hard-coded demo geometry).
+	const ready = state.status === "ready" ? state.map : null;
+	const spatial = useMemo(() => {
+		if (!ready) return null;
+		const r = mapWorldRect(ready.meta, ready.widthPx, ready.heightPx);
+		const bounds = {
+			minX: r.centerX - r.width / 2,
+			maxX: r.centerX + r.width / 2,
+			minY: r.centerY - r.height / 2,
+			maxY: r.centerY + r.height / 2,
+		};
+		return {
+			pose: getDemoPose(robotId, bounds),
+			overlays: getOverlays(robotId, bounds),
+		};
+	}, [ready, robotId]);
+
 	return (
 		<div className="relative h-full w-full overflow-hidden rounded-xl border border-border bg-canvas text-ink">
-			{state.status === "ready" && (
+			{ready && spatial && (
 				<Canvas
 					flat
 					frameloop="demand"
@@ -59,10 +78,10 @@ export function MapPanel({ src, pose, overlays }: Props) {
 					style={{ position: "absolute", inset: 0 }}
 				>
 					<MapScene
-						map={state.map}
-						pose={pose}
+						map={ready}
+						pose={spatial.pose}
 						theme={theme}
-						overlays={overlays}
+						overlays={spatial.overlays}
 						layers={layers}
 						apiRef={apiRef}
 						onCursor={setCursor}
@@ -70,13 +89,13 @@ export function MapPanel({ src, pose, overlays }: Props) {
 				</Canvas>
 			)}
 
-			{state.status === "ready" && (
+			{ready && spatial && (
 				<>
 					<LayersPanel layers={layers} onToggle={toggle} />
 					<Readout
 						cursor={cursor}
-						pose={pose}
-						resolution={state.map.meta.resolution}
+						pose={spatial.pose}
+						resolution={ready.meta.resolution}
 					/>
 					<div className="absolute right-4 bottom-4 z-10 flex flex-col gap-1.5">
 						<button

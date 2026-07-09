@@ -35,7 +35,9 @@ function buildTexture(
 	const unknown = themedBytes("var(--map-unknown)");
 
 	for (let i = 0; i < px.length; i += 4) {
-		const cls = classifyPixel(px[i], meta); // grayscale → r=g=b
+		// Transparent pixels are "unknown" (common in RGBA map exports); otherwise
+		// classify by the grayscale value (r=g=b in a ROS map).
+		const cls = px[i + 3] < 128 ? "unknown" : classifyPixel(px[i], meta);
 		const c = cls === "free" ? free : cls === "occupied" ? wall : unknown;
 		px[i] = c[0];
 		px[i + 1] = c[1];

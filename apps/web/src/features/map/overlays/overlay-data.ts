@@ -1,7 +1,17 @@
-// Representative overlay data in the ROS/world frame (meters), keyed to the
-// bundled demo map (origin [-10,-8], 20×16 m). Real overlays replace this later.
+import type { RobotPose } from "../ros-map";
+
+// Representative overlay data, generated RELATIVE TO THE LOADED MAP's world
+// bounds so it sits sensibly on whatever map is loaded. Still demo data — real
+// path/heatmap/zones/pose replace getOverlays()/getDemoPose() later.
 
 export type XY = [number, number];
+
+export interface Bounds {
+	minX: number;
+	maxX: number;
+	minY: number;
+	maxY: number;
+}
 
 export interface HeatGrid {
 	cols: number;
@@ -13,12 +23,11 @@ export interface HeatGrid {
 export interface Zone {
 	id: string;
 	nameKey: "zone_lobby" | "zone_corridor" | "zone_charging";
-	/** min corner + size, meters */
 	x: number;
 	y: number;
 	w: number;
 	h: number;
-	color: string; // css var
+	color: string;
 }
 
 export interface Overlays {
@@ -37,86 +46,106 @@ export const DEFAULT_LAYERS: LayerVisibility = {
 	zones: false,
 };
 
-const BOUNDS = { minX: -10, maxX: 10, minY: -8, maxY: 8 };
 const seedOf = (id: string) =>
 	id.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+const noise = (a: number, b: number) => {
+	const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+	return s - Math.floor(s);
+};
 
-// Lawnmower coverage path in the left room (clearly free space), varied per robot.
-function makePath(seed: number): XY[] {
-	const x0 = -8;
-	const x1 = -1.9;
-	const y0 = -6 + (seed % 3) * 0.4;
-	const y1 = 6;
-	const step = 1.2;
+// Lawnmower coverage path over the left ~45% of the map interior.
+function makePath(seed: number, b: Bounds): XY[] {
+	const W = b.maxX - b.minX;
+	const H = b.maxY - b.minY;
+	const x0 = b.minX + 0.1 * W;
+	const x1 = b.minX + 0.52 * W;
+	const y0 = b.minY + 0.12 * H + (seed % 3) * 0.02 * H;
+	const y1 = b.maxY - 0.12 * H;
+	const step = H * 0.09;
 	const pts: XY[] = [];
 	let dir = 1;
 	for (let y = y0; y <= y1; y += step) {
 		const xa = dir > 0 ? x0 : x1;
 		const xb = dir > 0 ? x1 : x0;
-		const n = 6;
-		for (let k = 0; k <= n; k++) {
-			const t = k / n;
-			const x = xa + (xb - xa) * t;
-			pts.push([x, y + Math.sin((x + seed) * 1.3) * 0.12]);
+		for (let k = 0; k <= 6; k++) {
+			const t = k / 6;
+			pts.push([
+				xa + (xb - xa) * t,
+				y + Math.sin((k + seed) * 1.3) * 0.015 * H,
+			]);
 		}
 		dir *= -1;
 	}
 	return pts;
 }
 
-// Coverage heatmap: intensity decays with distance from the path.
-function makeHeat(path: XY[]): HeatGrid {
+function makeHeat(path: XY[], b: Bounds): HeatGrid {
 	const cols = 48;
 	const rows = 38;
 	const data = new Float32Array(cols * rows);
-	const sigma2 = 2 * 0.85 * 0.85;
+	const reach = ((b.maxX - b.minX) * 0.045) ** 2 * 2;
 	for (let r = 0; r < rows; r++) {
-		const wy = BOUNDS.minY + ((r + 0.5) / rows) * (BOUNDS.maxY - BOUNDS.minY);
+		const wy = b.minY + ((r + 0.5) / rows) * (b.maxY - b.minY);
 		for (let c = 0; c < cols; c++) {
-			const wx = BOUNDS.minX + ((c + 0.5) / cols) * (BOUNDS.maxX - BOUNDS.minX);
+			const wx = b.minX + ((c + 0.5) / cols) * (b.maxX - b.minX);
 			let best = Infinity;
 			for (const [px, py] of path) {
 				const d = (px - wx) ** 2 + (py - wy) ** 2;
 				if (d < best) best = d;
 			}
-			data[r * cols + c] = Math.exp(-best / sigma2);
+			data[r * cols + c] = Math.exp(-best / reach);
 		}
 	}
 	return { cols, rows, data };
 }
 
-const ZONES: Zone[] = [
-	{
-		id: "lobby",
-		nameKey: "zone_lobby",
-		x: -8.2,
-		y: -6.6,
-		w: 6.6,
-		h: 5.2,
-		color: "var(--data-3)",
-	},
-	{
-		id: "corridor",
-		nameKey: "zone_corridor",
-		x: -0.9,
-		y: -1.3,
-		w: 9.4,
-		h: 2.2,
-		color: "var(--data-4)",
-	},
-	{
-		id: "charging",
-		nameKey: "zone_charging",
-		x: 4.6,
-		y: -6.6,
-		w: 3.8,
-		h: 3.2,
-		color: "var(--data-1)",
-	},
-];
+function makeZones(b: Bounds): Zone[] {
+	const W = b.maxX - b.minX;
+	const H = b.maxY - b.minY;
+	return [
+		{
+			id: "lobby",
+			nameKey: "zone_lobby",
+			x: b.minX + 0.06 * W,
+			y: b.minY + 0.08 * H,
+			w: 0.38 * W,
+			h: 0.4 * H,
+			color: "var(--data-3)",
+		},
+		{
+			id: "corridor",
+			nameKey: "zone_corridor",
+			x: b.minX + 0.46 * W,
+			y: b.minY + 0.43 * H,
+			w: 0.48 * W,
+			h: 0.14 * H,
+			color: "var(--data-4)",
+		},
+		{
+			id: "charging",
+			nameKey: "zone_charging",
+			x: b.minX + 0.64 * W,
+			y: b.minY + 0.08 * H,
+			w: 0.28 * W,
+			h: 0.24 * H,
+			color: "var(--data-1)",
+		},
+	];
+}
 
-export function getOverlays(robotId: string): Overlays {
+export function getOverlays(robotId: string, b: Bounds): Overlays {
+	const path = makePath(seedOf(robotId), b);
+	return { path, heat: makeHeat(path, b), zones: makeZones(b) };
+}
+
+/** A plausible robot pose within the covered (left) region of the loaded map. */
+export function getDemoPose(robotId: string, b: Bounds): RobotPose {
 	const seed = seedOf(robotId);
-	const path = makePath(seed);
-	return { path, heat: makeHeat(path), zones: ZONES };
+	const W = b.maxX - b.minX;
+	const H = b.maxY - b.minY;
+	return {
+		x: b.minX + (0.18 + 0.18 * noise(seed, 2)) * W,
+		y: b.minY + (0.3 + 0.4 * noise(seed, 3)) * H,
+		theta: noise(seed, 4) * Math.PI * 2,
+	};
 }
