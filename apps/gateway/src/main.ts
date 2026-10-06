@@ -6,7 +6,7 @@ import http from "node:http";
 import type { FleetSink, MapGrid, StartAdapter } from "@aibot/fleet-adapter";
 import { WebSocketServer } from "ws";
 import { type Days, openHistory } from "./history.ts";
-import { mapPng, mapVersion, mapYaml, validGrid } from "./map.ts";
+import { mapPng, mapStats, mapVersion, mapYaml, validGrid } from "./map.ts";
 
 const PORT = Number(process.env.WS_PORT ?? 8787);
 const HISTORY_DB = process.env.HISTORY_DB ?? "history.db";
@@ -44,7 +44,7 @@ export type LiveMessage =
 			alarms: { code: string; level: string; text: string }[];
 	  }
 	| { type: "link"; robot: string; up: boolean }
-	| { type: "map"; version: string };
+	| { type: "map"; version: string; session: string };
 
 const history = openHistory(HISTORY_DB);
 history.prune(HISTORY_DAYS, Date.now());
@@ -144,7 +144,8 @@ function queueMap(grid: MapGrid) {
 				if (mapFiles?.version === version) return;
 				mapFiles = { yaml: mapYaml(g), png: mapPng(g), version };
 				lastMapAt = Date.now();
-				send({ type: "map", version });
+				const session = history.mapSeen(lastMapAt, mapStats(g), g.session);
+				send({ type: "map", version, session });
 			});
 		},
 		Math.max(0, lastMapAt + MAP_MIN_MS - Date.now()),

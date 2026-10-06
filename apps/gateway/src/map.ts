@@ -88,6 +88,13 @@ export function mapYaml(g: MapGrid): string {
 	].join("\n");
 }
 
+/** Size facts the gateway uses to tell a growing map from a restarted one. */
+export function mapStats(g: MapGrid): { known: number; resolution: number } {
+	let known = 0;
+	for (let i = 0; i < g.data.length; i++) if (g.data[i] >= 0) known++;
+	return { known, resolution: g.resolution };
+}
+
 /** Content hash: an unchanged map (repeated by SLAM or several robots) isn't re-sent. */
 export function mapVersion(g: MapGrid): string {
 	const h = createHash("sha1");

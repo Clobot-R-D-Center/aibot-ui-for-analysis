@@ -2,9 +2,16 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import type { Mode } from "@aibot/fleet-adapter";
-import { bucketsFor, intervals, msWhere, openHistory } from "./history.ts";
+import {
+	bucketsFor,
+	intervals,
+	isNewSession,
+	msWhere,
+	openHistory,
+} from "./history.ts";
 
 const at = (h: number, m = 0, s = 0) => new Date(2026, 9, 6, h, m, s).getTime();
 
@@ -130,4 +137,56 @@ test("pruning keeps the state that still holds after the cutoff", () => {
 		.query(robot, 1, now)
 		.kpis.find((k) => k.key === "uptime")?.value;
 	assert.equal(uptime, 100); // online, unchanged, for the whole day
+});
+
+test("a map that shrinks a lot or changes resolution is a new session", () => {
+	const prev = { known: 1000, resolution: 0.05 };
+	assert.ok(!isNewSession(prev, { known: 1500, resolution: 0.05 })); // grew
+	assert.ok(!isNewSession(prev, { known: 900, resolution: 0.05 })); // loop closure trim
+	assert.ok(isNewSession(prev, { known: 300, resolution: 0.05 })); // restarted
+	assert.ok(isNewSession(prev, { known: 1000, resolution: 0.1 }));
+});
+
+test("coverage cells are kept per mapping session", () => {
+	const h = openHistory(":memory:", at(9));
+	const robot = "robot-a";
+	h.state(robot, at(9), { online: true, mode: "run", label: "RUN" });
+	const first = h.mapSeen(at(9), { known: 100, resolution: 0.05 });
+	assert.equal(h.mapSeen(at(9, 30), { known: 400, resolution: 0.05 }), first); // grows
+	for (let i = 0; i < 3; i++) h.pose(robot, at(10) + i * 1000, i, 0); // first session: 3 cells, 1 m apart
+	const second = h.mapSeen(at(11), { known: 50, resolution: 0.05 }); // SLAM restarted
+	assert.notEqual(second, first);
+	h.pose(robot, at(11, 30), 40, 40);
+
+	const r = h.query(robot, 1, at(12));
+	assert.equal(r.session?.id, second);
+	assert.deepEqual(r.cells, [[80, 80, 1]]); // only the new session's travel
+	assert.equal(r.kpis.find((k) => k.key === "distance")?.value, 0); // time KPIs untouched (2 m ≈ 0.0 km)
+
+	// an id from the adapter wins over guessing
+	assert.equal(
+		h.mapSeen(at(12), { known: 10, resolution: 0.05 }, "map-42"),
+		"map-42",
+	);
+	assert.equal(
+		h.mapSeen(at(12, 1), { known: 1, resolution: 0.05 }, "map-42"),
+		"map-42",
+	);
+});
+
+test("a restart continues the session, and old databases gain the column", () => {
+	const file = join(mkdtempSync(join(tmpdir(), "hist-")), "h.db");
+	// a database from before sessions existed
+	const old = new DatabaseSync(file);
+	old.exec(
+		"CREATE TABLE track (robot TEXT, t INTEGER, d REAL, cx INTEGER, cy INTEGER)",
+	);
+	old.exec("INSERT INTO track VALUES ('robot-a', 1, 0, 0, 0)");
+	old.close();
+
+	const a = openHistory(file, at(9));
+	const id = a.mapSeen(at(9), { known: 100, resolution: 0.05 });
+	const b = openHistory(file, at(10)); // gateway restarted
+	assert.equal(b.mapSeen(at(10), { known: 120, resolution: 0.05 }), id);
+	assert.equal(b.query("robot-a", 1, at(12)).session?.id, id);
 });

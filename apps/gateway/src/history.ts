@@ -15,6 +15,22 @@ const SAMPLE_MS = 1000; // at most one track row per robot per second
 const MIN_STEP = 0.05; // m; smaller moves are jitter, not travel
 const MAX_GAP = 5000; // ms; a longer silence starts a new segment (d = 0)
 const MAX_STEP = 5; // m per sample; more is a relocalization jump, not travel
+// ponytail: tuning knob — SLAM maps only grow (loop closures shave a little);
+// a map this much smaller than the last is a new mapping run.
+const RESTART_SHRINK = 0.5;
+
+export interface MapStats {
+	known: number;
+	resolution: number;
+}
+
+/** Without an id from the adapter: a new session when the map restarted. */
+export function isNewSession(prev: MapStats, next: MapStats): boolean {
+	return (
+		next.resolution !== prev.resolution ||
+		next.known < prev.known * RESTART_SHRINK
+	);
+}
 
 export type Days = 1 | 7 | 30;
 
@@ -151,9 +167,23 @@ export function openHistory(file: string, now = Date.now()) {
 		CREATE INDEX IF NOT EXISTS task_rt ON task (robot, t);
 		CREATE TABLE IF NOT EXISTS event (robot TEXT, t INTEGER, kind TEXT, detail TEXT);
 		CREATE INDEX IF NOT EXISTS event_rt ON event (robot, t);
+		CREATE TABLE IF NOT EXISTS map_session (id TEXT, t INTEGER, known INTEGER, resolution REAL);
 	`);
+	// Databases from before mapping sessions: their travel has no session.
+	if (
+		!(db.prepare("PRAGMA table_info(track)").all() as Row[]).some(
+			(c) => c.name === "session",
+		)
+	)
+		db.exec("ALTER TABLE track ADD COLUMN session TEXT");
 	const ins = {
-		track: db.prepare("INSERT INTO track VALUES (?, ?, ?, ?, ?)"),
+		track: db.prepare(
+			"INSERT INTO track (robot, t, d, cx, cy, session) VALUES (?, ?, ?, ?, ?, ?)",
+		),
+		session: db.prepare("INSERT INTO map_session VALUES (?, ?, ?, ?)"),
+		sessionStats: db.prepare(
+			"UPDATE map_session SET known = ?, resolution = ? WHERE id = ?",
+		),
 		state: db.prepare("INSERT INTO state VALUES (?, ?, ?, ?, ?)"),
 		wait: db.prepare("INSERT INTO wait VALUES (?, ?, ?)"),
 		task: db.prepare("INSERT INTO task VALUES (?, ?, ?, ?)"),
@@ -217,7 +247,14 @@ export function openHistory(file: string, now = Date.now()) {
 			if (d > MAX_STEP) d = 0;
 		}
 		r.last = { t, x, y };
-		ins.track.run(robot, t, d, Math.floor(x / CELL), Math.floor(y / CELL));
+		ins.track.run(
+			robot,
+			t,
+			d,
+			Math.floor(x / CELL),
+			Math.floor(y / CELL),
+			session?.id ?? null,
+		);
 	}
 
 	function task(robot: string, t: number, ok: boolean, detail: string) {
@@ -239,6 +276,30 @@ export function openHistory(file: string, now = Date.now()) {
 					`[${a.level || "?"}] ${a.code}${a.text ? ` ${a.text}` : ""}`,
 				);
 		r.alarms = now;
+	}
+
+	/**
+	 * Mapping session: coverage cells are only comparable within one map frame,
+	 * so travel is tagged with the session and cells are read for the current
+	 * one only. Restored from the last row, so a gateway restart continues it.
+	 */
+	let session = (db
+		.prepare("SELECT * FROM map_session ORDER BY rowid DESC LIMIT 1")
+		.get() ?? null) as ({ id: string; t: number } & MapStats) | null;
+
+	/** A map was published: continue the current session or start a new one. */
+	function mapSeen(t: number, stats: MapStats, id?: string): string {
+		const fresh = id
+			? id !== session?.id
+			: !session || isNewSession(session, stats);
+		if (fresh) {
+			session = { id: id ?? `map-${t}`, t, ...stats };
+			ins.session.run(session.id, t, stats.known, stats.resolution);
+		} else if (session) {
+			Object.assign(session, stats);
+			ins.sessionStats.run(stats.known, stats.resolution, session.id);
+		}
+		return (session as { id: string }).id;
 	}
 
 	/**
@@ -294,7 +355,7 @@ export function openHistory(file: string, now = Date.now()) {
 			"SELECT t, kind, detail FROM event WHERE robot = ? AND t >= ? AND t < ?",
 		),
 		cells: db.prepare(
-			"SELECT cx, cy, COUNT(*) AS n FROM track WHERE robot = ? AND t >= ? AND t < ? GROUP BY cx, cy",
+			"SELECT cx, cy, COUNT(*) AS n FROM track WHERE robot = ? AND t >= ? AND t < ? AND session IS ? GROUP BY cx, cy",
 		),
 	};
 
@@ -467,12 +528,21 @@ export function openHistory(file: string, now = Date.now()) {
 				),
 			})),
 			events,
+			/** the mapping session cells (and so coverage) are read for */
+			session: session ? { id: session.id, since: session.t } : null,
 			cell: CELL,
 			cells: (
-				q.cells.all(robot, from, now) as { cx: number; cy: number; n: number }[]
+				q.cells.all(robot, from, now, session?.id ?? null) as {
+					cx: number;
+					cy: number;
+					n: number;
+				}[]
 			).map((r) => [r.cx, r.cy, r.n]),
 			prevCells: (
-				q.cells.all(robot, pFrom, pTo) as { cx: number; cy: number }[]
+				q.cells.all(robot, pFrom, pTo, session?.id ?? null) as {
+					cx: number;
+					cy: number;
+				}[]
 			).map((r) => [r.cx, r.cy]),
 		};
 	}
@@ -496,6 +566,7 @@ export function openHistory(file: string, now = Date.now()) {
 		task,
 		event,
 		alarms,
+		mapSeen,
 		markAllOffline,
 		query,
 		prune,

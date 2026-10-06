@@ -37,6 +37,13 @@ export interface MapGrid {
 	width: number;
 	height: number;
 	data: ArrayLike<number>;
+	/**
+	 * Identifies the mapping session (e.g. a map id): it changes when the map's
+	 * frame is redefined — a new SLAM run or a different map — so recorded
+	 * coverage from another frame isn't mixed in. Omit it and the gateway
+	 * guesses: a map that shrinks a lot or changes resolution starts a new one.
+	 */
+	session?: string;
 }
 
 export interface Alarm {

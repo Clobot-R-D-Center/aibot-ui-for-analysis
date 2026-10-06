@@ -32,6 +32,10 @@ and run the gateway with `FLEET_ADAPTER=<name>`.
 - Report `state` periodically or on change, since repeats are deduped. Report `poses`
   at your natural rate (~10 Hz is plenty). Report `alarms` as the full active
   list, and the gateway records only newly raised ones.
+- Report the map with `map()` whenever it changes; the gateway dedupes and
+  throttles. If you know when a new mapping run (a new map frame) starts,
+  set `session` (e.g. a map id); otherwise the gateway guesses from the map
+  shrinking a lot. Coverage is kept per session.
 - Call `lost()` when your source disconnects. Robot states are unknown from then
   on, so that time isn't counted as uptime.
 - ROS 2 robots running
