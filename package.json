@@ -5,7 +5,8 @@
 		"check-types": "turbo run check-types",
 		"dev": "turbo run dev",
 		"format-and-lint": "biome check .",
-		"format-and-lint:fix": "biome check . --write"
+		"format-and-lint:fix": "biome check . --write",
+		"test": "turbo run test"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.3",
