@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
 
 permissions:
@@ -26,4 +26,4 @@ jobs:
       - run: pnpm format-and-lint
       - run: pnpm check-types
       - run: pnpm build
-      - run: pnpm --filter web test
+      - run: pnpm test
