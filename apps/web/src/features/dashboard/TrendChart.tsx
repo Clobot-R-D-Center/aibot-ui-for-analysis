@@ -45,7 +45,12 @@ export function TrendChart({ points, color, unit, height = 168 }: Props) {
 		? `${line} L${x(points.length - 1).toFixed(1)},${(PAD.t + innerH).toFixed(1)} L${PAD.l},${(PAD.t + innerH).toFixed(1)} Z`
 		: "";
 
-	const gridVals = [max, min + span / 2, min];
+	// Keyed by position: on a flat series (all zeros) max === min.
+	const gridVals = [
+		["top", max],
+		["mid", min + span / 2],
+		["bottom", min],
+	] as const;
 	const hp = hover != null ? points[hover] : null;
 
 	const onMove = (e: React.PointerEvent) => {
@@ -68,8 +73,8 @@ export function TrendChart({ points, color, unit, height = 168 }: Props) {
 				>
 					<title>{`trend (${unit})`}</title>
 					{/* recessive gridlines + y labels */}
-					{gridVals.map((gv) => (
-						<g key={gv}>
+					{gridVals.map(([pos, gv]) => (
+						<g key={pos}>
 							<line
 								x1={PAD.l}
 								x2={w - PAD.r}
@@ -86,7 +91,7 @@ export function TrendChart({ points, color, unit, height = 168 }: Props) {
 								fontSize={10}
 								fill="var(--faint)"
 							>
-								{Math.round(gv)}
+								{Math.abs(gv) >= 10 ? Math.round(gv) : gv.toFixed(1)}
 							</text>
 						</g>
 					))}
