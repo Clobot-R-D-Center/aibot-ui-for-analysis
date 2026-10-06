@@ -1,0 +1,7 @@
+{
+	"name": "@aibot/fleet-adapter",
+	"private": true,
+	"description": "Adapter interface between a robot stack and the fleet gateway",
+	"type": "module",
+	"exports": "./src/index.ts"
+}
