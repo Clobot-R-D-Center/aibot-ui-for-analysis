@@ -24,12 +24,11 @@ export function DashboardShell() {
 		? picked
 		: (robots[0]?.id ?? picked);
 	const [range, setRange] = useState<RangeDays>(7);
-	// ponytail: KPIs/charts/events stay demo (keyed by robot id) until the gateway records history
 	const { state, retry } = useRobotData(robotId, range);
 
 	const ready = state.status === "ready" ? state.data : null;
 	const lastDistance = ready?.distance.at(-1)?.value ?? 0;
-	const lastSuccess = ready?.success.at(-1)?.value ?? 0;
+	const lastRun = ready?.run.at(-1)?.value ?? 0;
 
 	return (
 		<div className="flex h-[100dvh] flex-col bg-canvas text-ink">
@@ -83,11 +82,11 @@ export function DashboardShell() {
 							</AsyncContent>
 						</Panel>
 						<Panel
-							title={m.chart_success()}
+							title={m.chart_run()}
 							action={
 								ready ? (
 									<span className="tnum text-ink text-sm tabular-nums">
-										{lastSuccess} <span className="text-faint">%</span>
+										{lastRun} <span className="text-faint">%</span>
 									</span>
 								) : undefined
 							}
@@ -99,7 +98,7 @@ export function DashboardShell() {
 							>
 								{(data) => (
 									<TrendChart
-										points={data.success}
+										points={data.run}
 										color="var(--data-3)"
 										unit="%"
 									/>
@@ -126,7 +125,15 @@ export function DashboardShell() {
 function KpiSkeleton() {
 	return (
 		<div className="stats stats-vertical w-full border border-base-300 bg-base-100 shadow-sm sm:stats-horizontal">
-			{["coverage", "distance", "success", "uptime"].map((k) => (
+			{[
+				"coverage",
+				"distance",
+				"uptime",
+				"run",
+				"success",
+				"errors",
+				"wait",
+			].map((k) => (
 				<div className="stat gap-2" key={k}>
 					<div className="skeleton h-3 w-20" />
 					<div className="skeleton h-7 w-24" />

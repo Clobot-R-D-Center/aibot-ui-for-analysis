@@ -3,6 +3,11 @@ import { applyMessage, type Fleet, isStale, type LiveRobot } from "./fleet";
 
 /** Gateway WebSocket (apps/gateway). Unset → the dashboard stays on demo data. */
 export const GATEWAY_URL: string | undefined = import.meta.env.VITE_GATEWAY_URL;
+/** The gateway serves history over HTTP on the same host:port (ws→http, wss→https). */
+export const HISTORY_URL = GATEWAY_URL?.replace(/^ws/, "http").replace(
+	/\/?$/,
+	"/history",
+);
 
 export interface FleetLive {
 	/** `stale`: offline, no recent pose, or the gateway link is down */

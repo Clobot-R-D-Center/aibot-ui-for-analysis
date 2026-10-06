@@ -1,10 +1,19 @@
 import {
-	BatteryCharging,
+	Bell,
 	CheckCircle2,
 	CircleDot,
+	CircleX,
+	Clock,
+	Hourglass,
+	MapPinned,
+	OctagonAlert,
+	Pause,
 	Play,
-	ShieldCheck,
+	Repeat,
+	RotateCcw,
 	TriangleAlert,
+	Wifi,
+	WifiOff,
 } from "lucide-react";
 import type { ComponentType, CSSProperties } from "react";
 import { m } from "#/paraglide/messages.js";
@@ -16,30 +25,65 @@ const META: Record<
 	EventKind,
 	{ icon: IconCmp; color: string; label: () => string }
 > = {
-	task_start: {
+	online: { icon: Wifi, color: "var(--data-3)", label: () => m.event_online() },
+	offline: {
+		icon: WifiOff,
+		color: "var(--muted)",
+		label: () => m.event_offline(),
+	},
+	run_start: {
 		icon: Play,
 		color: "var(--accent)",
-		label: () => m.event_task_start(),
+		label: () => m.event_run_start(),
 	},
-	task_done: {
+	run_end: {
 		icon: CheckCircle2,
 		color: "var(--data-3)",
-		label: () => m.event_task_done(),
+		label: () => m.event_run_end(),
 	},
-	warning: {
+	error: {
 		icon: TriangleAlert,
 		color: "var(--data-4)",
-		label: () => m.event_warning(),
+		label: () => m.event_error(),
 	},
-	avoid: {
-		icon: ShieldCheck,
+	pause: { icon: Pause, color: "var(--muted)", label: () => m.event_pause() },
+	state: { icon: Repeat, color: "var(--muted)", label: () => m.event_state() },
+	wait: {
+		icon: Hourglass,
 		color: "var(--data-2)",
-		label: () => m.event_avoid(),
+		label: () => m.event_wait(),
 	},
-	dock: {
-		icon: BatteryCharging,
+	task_ok: {
+		icon: CheckCircle2,
+		color: "var(--data-3)",
+		label: () => m.event_task_ok(),
+	},
+	task_fail: {
+		icon: CircleX,
+		color: "var(--data-4)",
+		label: () => m.event_task_fail(),
+	},
+	alarm: { icon: Bell, color: "var(--data-4)", label: () => m.event_alarm() },
+	obstacle: {
+		icon: OctagonAlert,
+		color: "var(--data-2)",
+		label: () => m.event_obstacle(),
+	},
+	recovery: {
+		icon: RotateCcw,
 		color: "var(--muted)",
-		label: () => m.event_dock(),
+		label: () => m.event_recovery(),
+	},
+	recovery_fail: {
+		icon: RotateCcw,
+		color: "var(--data-4)",
+		label: () => m.event_recovery_fail(),
+	},
+	zone: { icon: MapPinned, color: "var(--muted)", label: () => m.event_zone() },
+	pending: {
+		icon: Clock,
+		color: "var(--muted)",
+		label: () => m.event_pending(),
 	},
 };
 
@@ -54,12 +98,13 @@ export function EventLog({ events }: { events: RobotEvent[] }) {
 	}
 	return (
 		<ul className="flex flex-col">
-			{events.map((e) => {
+			{events.map((e, i) => {
 				const meta = META[e.kind];
 				const Icon = meta.icon;
 				return (
 					<li
-						key={`${e.time}-${e.detail}`}
+						// biome-ignore lint/suspicious/noArrayIndexKey: same-minute events can repeat time+kind+detail; the list is replaced whole, never reordered
+						key={`${i}-${e.time}-${e.kind}`}
 						className="flex items-center gap-3 border-border/60 border-b py-2.5 last:border-0"
 					>
 						<span
