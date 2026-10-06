@@ -10,18 +10,25 @@ import {
 /** Live history keeps growing, so it's re-read in the background; demo data doesn't change. */
 const REFRESH_MS = HISTORY_URL ? 60_000 : 0;
 
-/** Loads robot data behind the async boundary. Mirrors useRosMap. */
+/**
+ * Loads robot data behind the async boundary. Mirrors useRosMap. A change of
+ * `key` (e.g. a new mapping session) reloads right away instead of waiting
+ * for the next background refresh.
+ */
 export function useRobotData(
 	robotId: string,
 	days: RangeDays,
-	refreshMs = REFRESH_MS,
+	{
+		refreshMs = REFRESH_MS,
+		key = "",
+	}: { refreshMs?: number; key?: string } = {},
 ) {
 	const [nonce, setNonce] = useState(0);
 	const [state, setState] = useState<AsyncState<RobotData>>({
 		status: "loading",
 	});
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: `nonce` is the retry trigger
+	// biome-ignore lint/correctness/useExhaustiveDependencies: `nonce` and `key` are reload triggers
 	useEffect(() => {
 		const ctrl = new AbortController();
 		setState({ status: "loading" });
@@ -42,7 +49,7 @@ export function useRobotData(
 			ctrl.abort();
 			clearInterval(id);
 		};
-	}, [robotId, days, nonce, refreshMs]);
+	}, [robotId, days, nonce, refreshMs, key]);
 
 	return { state, retry: () => setNonce((n) => n + 1) };
 }

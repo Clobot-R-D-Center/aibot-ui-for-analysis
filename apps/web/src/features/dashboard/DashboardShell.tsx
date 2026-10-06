@@ -47,7 +47,10 @@ export function DashboardShell() {
 		? picked
 		: (robots[0]?.id ?? picked);
 	const [range, setRange] = useState<RangeDays>(7);
-	const { state, retry } = useRobotData(robotId, range);
+	// A new mapping session changes which coverage cells apply: reload then.
+	const { state, retry } = useRobotData(robotId, range, {
+		key: live?.mapSession ?? "",
+	});
 	const [mapNonce, setMapNonce] = useState(0);
 	// Live: the gateway's map, reloaded whenever its version changes (SLAM).
 	const map = useRosMap(

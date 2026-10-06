@@ -15,6 +15,8 @@ export interface FleetLive {
 	connected: boolean;
 	/** content version of the gateway's map; changes as SLAM grows it; null = none yet */
 	mapVersion: string | null;
+	/** mapping session of that map; changes when a new map (frame) starts */
+	mapSession: string | null;
 }
 
 /**
@@ -25,7 +27,9 @@ export interface FleetLive {
 export function useFleetLive(url = GATEWAY_URL): FleetLive | null {
 	const [fleet, setFleet] = useState<Fleet>({});
 	const [connected, setConnected] = useState(false);
-	const [mapVersion, setMapVersion] = useState<string | null>(null);
+	const [map, setMap] = useState<{ version: string; session: string } | null>(
+		null,
+	);
 	// Staleness is time-based, so re-evaluate even when no messages arrive.
 	const [now, setNow] = useState(() => Date.now());
 	useEffect(() => {
@@ -47,7 +51,10 @@ export function useFleetLive(url = GATEWAY_URL): FleetLive | null {
 				try {
 					const msg = JSON.parse(e.data);
 					if (msg?.type === "map" && typeof msg.version === "string")
-						return setMapVersion(msg.version);
+						return setMap({
+							version: msg.version,
+							session: typeof msg.session === "string" ? msg.session : "",
+						});
 					const at = Date.now();
 					setFleet((f) => applyMessage(f, msg, at));
 				} catch {}
@@ -72,6 +79,7 @@ export function useFleetLive(url = GATEWAY_URL): FleetLive | null {
 			.sort((a, b) => a.name.localeCompare(b.name))
 			.map((r) => ({ ...r, stale: !connected || isStale(r, now) })),
 		connected,
-		mapVersion,
+		mapVersion: map?.version ?? null,
+		mapSession: map?.session ?? null,
 	};
 }

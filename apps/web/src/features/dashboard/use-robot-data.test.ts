@@ -23,7 +23,9 @@ describe("useRobotData background refresh", () => {
 			.mockResolvedValueOnce(data(1))
 			.mockRejectedValueOnce(new Error("gateway down"))
 			.mockResolvedValueOnce(data(2));
-		const { result } = renderHook(() => useRobotData("robot-a", 7, 1000));
+		const { result } = renderHook(() =>
+			useRobotData("robot-a", 7, { refreshMs: 1000 }),
+		);
 		await flush();
 		expect(result.current.state).toEqual({ status: "ready", data: data(1) });
 
