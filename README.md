@@ -124,7 +124,7 @@ pnpm --filter gateway test
 ├── packages/
 │   ├── fleet-adapter/          # 어댑터 인터페이스와 작성 안내
 │   ├── adapter-sim/            # 시뮬레이터 어댑터 (기본값, 참고 구현)
-│   └── foxglove-link/          # ROS 2 로봇용 foxglove_bridge 클라이언트 (어댑터에서 사용)
+│   └── foxglove-link/          # ROS 2 로봇용 foxglove_bridge 클라이언트 (어댑터에서 사용, 로봇 쪽 설정은 README 참고)
 ├── package.json                # 공통 스크립트
 ├── pnpm-workspace.yaml         # 워크스페이스 설정
 └── turbo.json                  # 터보레포 파이프라인 설정
