@@ -3,9 +3,13 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
+		"dev": "node --watch src/main.ts",
+		"start": "node src/main.ts",
 		"test": "node --test 'src/**/*.test.ts'"
 	},
 	"dependencies": {
-		"@aibot/fleet-adapter": "workspace:*"
+		"@aibot/adapter-sim": "workspace:*",
+		"@aibot/fleet-adapter": "workspace:*",
+		"ws": "^8.22.0"
 	}
 }

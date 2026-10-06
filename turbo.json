@@ -9,7 +9,13 @@
 		},
 		"dev": {
 			"persistent": true,
-			"cache": false
+			"cache": false,
+			"passThroughEnv": [
+				"FLEET_ADAPTER",
+				"WS_PORT",
+				"HISTORY_DB",
+				"HISTORY_DAYS"
+			]
 		},
 		"test": {}
 	}
