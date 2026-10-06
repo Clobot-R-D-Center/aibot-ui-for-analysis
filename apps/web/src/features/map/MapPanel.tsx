@@ -11,8 +11,9 @@ import {
 	TriangleAlert,
 } from "lucide-react";
 import { type ReactNode, useMemo, useRef, useState } from "react";
+import type { FleetLive } from "#/features/live/use-fleet-live";
 import { m } from "#/paraglide/messages.js";
-import { MapScene, type ViewApi } from "./MapScene";
+import { type MapRobot, MapScene, type ViewApi } from "./MapScene";
 import {
 	DEFAULT_LAYERS,
 	getDemoPose,
@@ -20,7 +21,7 @@ import {
 	type LayerKey,
 	type LayerVisibility,
 } from "./overlays/overlay-data";
-import { mapWorldRect, type RobotPose } from "./ros-map";
+import { mapWorldRect } from "./ros-map";
 import { useTheme } from "./theme";
 import { useRosMap } from "./use-ros-map";
 
@@ -35,11 +36,13 @@ function deg(rad: number) {
 
 interface Props {
 	src: string;
-	/** seeds the demo pose + overlays (real spatial data replaces these later) */
+	/** selected robot; also seeds the demo overlays (and the demo pose without `live`) */
 	robotId: string;
+	/** live fleet; null/undefined → a single demo pose */
+	live?: FleetLive | null;
 }
 
-export function MapPanel({ src, robotId }: Props) {
+export function MapPanel({ src, robotId, live }: Props) {
 	const theme = useTheme();
 	const [nonce, setNonce] = useState(0);
 	const state = useRosMap(src, nonce);
@@ -66,6 +69,37 @@ export function MapPanel({ src, robotId }: Props) {
 		};
 	}, [ready, robotId]);
 
+	// Selected robot sorted last so it draws on top of the others.
+	const robots = useMemo<MapRobot[]>(() => {
+		if (!spatial) return [];
+		if (!live)
+			return [
+				{
+					id: robotId,
+					pose: spatial.pose,
+					selected: true,
+					stale: false,
+					plan: spatial.overlays.path,
+				},
+			];
+		return live.robots
+			.flatMap((r) =>
+				r.pose
+					? [
+							{
+								id: r.name,
+								pose: r.pose,
+								selected: r.name === robotId,
+								stale: r.stale,
+								plan: r.plan,
+							},
+						]
+					: [],
+			)
+			.sort((a, b) => Number(a.selected) - Number(b.selected));
+	}, [spatial, live, robotId]);
+	const selected = robots.find((r) => r.selected) ?? null;
+
 	return (
 		<div className="relative h-full w-full overflow-hidden rounded-xl border border-border bg-canvas text-ink">
 			{ready && spatial && (
@@ -78,7 +112,7 @@ export function MapPanel({ src, robotId }: Props) {
 				>
 					<MapScene
 						map={ready}
-						pose={spatial.pose}
+						robots={robots}
 						theme={theme}
 						overlays={spatial.overlays}
 						layers={layers}
@@ -93,7 +127,7 @@ export function MapPanel({ src, robotId }: Props) {
 					<LayersPanel layers={layers} onToggle={toggle} />
 					<Readout
 						cursor={cursor}
-						pose={spatial.pose}
+						robot={selected}
 						resolution={ready.meta.resolution}
 					/>
 					<div className="absolute right-4 bottom-4 z-10 flex flex-col gap-1.5">
@@ -271,11 +305,11 @@ function Swatch({ varName, hatched }: { varName: string; hatched?: boolean }) {
 
 function Readout({
 	cursor,
-	pose,
+	robot,
 	resolution,
 }: {
 	cursor: { x: number; y: number } | null;
-	pose: RobotPose;
+	robot: MapRobot | null;
 	resolution: number;
 }) {
 	return (
@@ -293,9 +327,15 @@ function Readout({
 				icon={<Bot className="size-3.5 text-robot" />}
 				label={m.readout_robot()}
 			>
-				<span className="tnum text-ink">
-					{fmt(pose.x)}, {fmt(pose.y)} m · {deg(pose.theta)}°
-				</span>
+				{robot ? (
+					<span className={`tnum ${robot.stale ? "text-faint" : "text-ink"}`}>
+						{robot.stale && <>{m.readout_stale()} · </>}
+						{fmt(robot.pose.x)}, {fmt(robot.pose.y)} m · {deg(robot.pose.theta)}
+						°
+					</span>
+				) : (
+					<span className="text-faint">—</span>
+				)}
 			</Row>
 			<Row
 				icon={<span className="inline-block size-3.5" />}

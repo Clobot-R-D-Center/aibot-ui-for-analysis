@@ -4,7 +4,7 @@ import { m } from "#/paraglide/messages.js";
 import { RANGES, type RangeDays, type Robot } from "./demo-data";
 
 interface Props {
-	robots: Robot[];
+	robots: Pick<Robot, "id" | "name">[];
 	robotId: string;
 	onRobot: (id: string) => void;
 	range: RangeDays;

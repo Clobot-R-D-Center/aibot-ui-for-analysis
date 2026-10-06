@@ -29,6 +29,7 @@
   "readout_cursor": "커서",
   "readout_robot": "로봇",
   "readout_resolution": "해상도",
+  "readout_stale": "오프라인",
   "readout_offmap": "맵 밖",
   "unit_mpp": "m/px",
   "robot_label": "로봇",

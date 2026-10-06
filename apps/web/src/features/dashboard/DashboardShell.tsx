@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useFleetLive } from "#/features/live/use-fleet-live";
 import { MapPanel } from "#/features/map/MapPanel";
 import { m } from "#/paraglide/messages.js";
 import { AsyncContent } from "./AsyncContent";
@@ -13,8 +14,17 @@ import { useRobotData } from "./use-robot-data";
 const MAP_SRC = "/demo-map";
 
 export function DashboardShell() {
-	const [robotId, setRobotId] = useState(ROBOTS[0].id);
+	const live = useFleetLive();
+	const robots = live
+		? live.robots.map((r) => ({ id: r.name, name: r.name }))
+		: ROBOTS;
+	const [picked, setPicked] = useState(ROBOTS[0].id);
+	// Live list arrives after first render; fall back to its first robot.
+	const robotId = robots.some((r) => r.id === picked)
+		? picked
+		: (robots[0]?.id ?? picked);
 	const [range, setRange] = useState<RangeDays>(7);
+	// ponytail: KPIs/charts/events stay demo (keyed by robot id) until the gateway records history
 	const { state, retry } = useRobotData(robotId, range);
 
 	const ready = state.status === "ready" ? state.data : null;
@@ -24,9 +34,9 @@ export function DashboardShell() {
 	return (
 		<div className="flex h-[100dvh] flex-col bg-canvas text-ink">
 			<TopBar
-				robots={ROBOTS}
+				robots={robots}
 				robotId={robotId}
-				onRobot={setRobotId}
+				onRobot={setPicked}
 				range={range}
 				onRange={setRange}
 			/>
@@ -43,7 +53,7 @@ export function DashboardShell() {
 
 					{/* Map hero — its own bordered panel, fills a tall band above the fold */}
 					<div className="h-[60vh] min-h-[380px]">
-						<MapPanel src={MAP_SRC} robotId={robotId} />
+						<MapPanel src={MAP_SRC} robotId={robotId} live={live} />
 					</div>
 
 					{/* Trends — scroll down for detail */}

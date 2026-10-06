@@ -29,6 +29,7 @@
   "readout_cursor": "Cursor",
   "readout_robot": "Robot",
   "readout_resolution": "Resolution",
+  "readout_stale": "offline",
   "readout_offmap": "off map",
   "unit_mpp": "m/px",
   "robot_label": "Robot",

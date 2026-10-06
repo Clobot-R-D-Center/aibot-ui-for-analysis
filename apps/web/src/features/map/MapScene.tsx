@@ -3,7 +3,7 @@ import { type ThreeEvent, useThree } from "@react-three/fiber";
 import { type RefObject, useCallback, useEffect, useMemo, useRef } from "react";
 import { OccupancyLayer } from "./OccupancyLayer";
 import { HeatmapLayer } from "./overlays/HeatmapLayer";
-import type { LayerVisibility, Overlays } from "./overlays/overlay-data";
+import type { LayerVisibility, Overlays, XY } from "./overlays/overlay-data";
 import { PathLayer } from "./overlays/PathLayer";
 import { ZonesLayer } from "./overlays/ZonesLayer";
 import { RobotMarker } from "./RobotMarker";
@@ -81,9 +81,19 @@ function CameraRig({
 	return null;
 }
 
+export interface MapRobot {
+	id: string;
+	pose: RobotPose;
+	selected: boolean;
+	/** last known pose, not current (see live/fleet.ts isStale) */
+	stale: boolean;
+	/** planned path; hidden while stale (an old plan would read as current) */
+	plan: XY[];
+}
+
 interface Props {
 	map: LoadedMap;
-	pose: RobotPose;
+	robots: MapRobot[];
 	theme: Theme;
 	overlays: Overlays;
 	layers: LayerVisibility;
@@ -93,7 +103,7 @@ interface Props {
 
 export function MapScene({
 	map,
-	pose,
+	robots,
 	theme,
 	overlays,
 	layers,
@@ -108,9 +118,9 @@ export function MapScene({
 	);
 	const invalidate = useThree((s) => s.invalidate);
 
-	// Re-render on any visual change (demand frameloop): theme, pose, layers.
+	// Re-render on any visual change (demand frameloop): theme, poses, layers.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: these are the change triggers
-	useEffect(() => invalidate(), [invalidate, theme, pose, layers, overlays]);
+	useEffect(() => invalidate(), [invalidate, theme, robots, layers, overlays]);
 
 	// Stable array refs so r3f/drei apply them once, never re-applying (and
 	// snapping the camera back) on later re-renders.
@@ -161,8 +171,29 @@ export function MapScene({
 				/>
 			)}
 			{layers.zones && <ZonesLayer zones={overlays.zones} theme={theme} />}
-			{layers.path && <PathLayer path={overlays.path} theme={theme} />}
-			{layers.robot && <RobotMarker pose={pose} theme={theme} />}
+			{layers.path &&
+				robots.map(
+					(r) =>
+						!r.stale &&
+						r.plan.length > 1 && (
+							<PathLayer
+								key={r.id}
+								path={r.plan}
+								theme={theme}
+								muted={!r.selected}
+							/>
+						),
+				)}
+			{layers.robot &&
+				robots.map((r) => (
+					<RobotMarker
+						key={r.id}
+						pose={r.pose}
+						theme={theme}
+						muted={!r.selected}
+						stale={r.stale}
+					/>
+				))}
 		</>
 	);
 }

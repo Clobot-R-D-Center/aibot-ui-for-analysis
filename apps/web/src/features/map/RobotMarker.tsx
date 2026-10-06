@@ -10,14 +10,24 @@ function srgb(cssVar: string) {
 	return new THREE.Color().setRGB(rgb[0], rgb[1], rgb[2], THREE.SRGBColorSpace);
 }
 
-/** Robot pose glyph: soft halo + disc + heading chevron, roughly to scale (~0.6 m). */
+/**
+ * Robot pose glyph: soft halo + disc + heading chevron, roughly to scale (~0.6 m).
+ * `muted` (other robots in the fleet) drops the halo and fades the body, so the
+ * selected robot stands out by shape as well as color. `stale` (offline, last
+ * known pose) fades the whole glyph further; the readout spells it out in text.
+ */
 export function RobotMarker({
 	pose,
 	theme,
+	muted = false,
+	stale = false,
 }: {
 	pose: RobotPose;
 	theme: Theme;
+	muted?: boolean;
+	stale?: boolean;
 }) {
+	const fade = stale ? 0.3 : 1;
 	// biome-ignore lint/correctness/useExhaustiveDependencies: theme drives the recolor
 	const { body, ink, chevron } = useMemo(() => {
 		const shape = new THREE.Shape();
@@ -38,7 +48,7 @@ export function RobotMarker({
 	return (
 		<group position={[pose.x, pose.y, Z]} rotation={[0, 0, pose.theta]}>
 			{/* soft halo ring — draws attention without motion */}
-			<mesh renderOrder={10}>
+			<mesh renderOrder={10} visible={!muted && !stale}>
 				<ringGeometry args={[0.36, 0.5, 48]} />
 				<meshBasicMaterial
 					color={body}
@@ -55,6 +65,7 @@ export function RobotMarker({
 				<meshBasicMaterial
 					color={body}
 					transparent
+					opacity={(muted ? 0.55 : 1) * fade}
 					depthTest={false}
 					depthWrite={false}
 					toneMapped={false}
@@ -65,6 +76,7 @@ export function RobotMarker({
 				<meshBasicMaterial
 					color={ink}
 					transparent
+					opacity={fade}
 					depthTest={false}
 					depthWrite={false}
 					toneMapped={false}
