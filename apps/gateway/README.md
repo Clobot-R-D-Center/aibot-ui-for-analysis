@@ -21,6 +21,7 @@ robots ──(any transport)──▶ @aibot/adapter-<name> ──FleetSink─�
 |---|---|
 | `@aibot/fleet-adapter` | the adapter interface, and how to write one |
 | `@aibot/adapter-sim` | simulated fleet: the default and reference adapter |
+| `@aibot/foxglove-link` | foxglove_bridge client for ROS 2 adapters |
 
 ## Run
 

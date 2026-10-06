@@ -34,5 +34,9 @@ and run the gateway with `FLEET_ADAPTER=<name>`.
   list, and the gateway records only newly raised ones.
 - Call `lost()` when your source disconnects. Robot states are unknown from then
   on, so that time isn't counted as uptime.
+- ROS 2 robots running
+  [foxglove_bridge](https://github.com/foxglove/ros-foxglove-bridge)?
+  `@aibot/foxglove-link` subscribes to the topics you list per robot and decodes
+  their CDR messages.
 
 `@aibot/adapter-sim` is a complete reference adapter.

@@ -1,0 +1,17 @@
+{
+	"name": "@aibot/foxglove-link",
+	"private": true,
+	"description": "Per-robot foxglove_bridge client decoding ROS 2 (CDR) topics, for adapters",
+	"type": "module",
+	"exports": "./src/index.ts",
+	"scripts": {
+		"test": "node --test 'src/**/*.test.ts'"
+	},
+	"dependencies": {
+		"@aibot/fleet-adapter": "workspace:*",
+		"@foxglove/rosmsg": "5.0.5",
+		"@foxglove/rosmsg2-serialization": "3.1.2",
+		"@foxglove/ws-protocol": "0.8.0",
+		"ws": "^8.22.0"
+	}
+}
