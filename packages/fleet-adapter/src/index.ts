@@ -24,6 +24,21 @@ export interface Pose {
 	theta: number;
 }
 
+/**
+ * An occupancy grid with ROS nav_msgs/OccupancyGrid semantics: row-major from
+ * the bottom-left cell (row 0 = min y), each cell -1 (unknown) or 0–100
+ * (occupancy %). Same frame as the poses.
+ */
+export interface MapGrid {
+	/** meters per cell */
+	resolution: number;
+	/** map frame pose of cell (0, 0)'s outer corner */
+	origin: { x: number; y: number; yaw: number };
+	width: number;
+	height: number;
+	data: ArrayLike<number>;
+}
+
 export interface Alarm {
 	code: number | string;
 	level: string;
@@ -51,6 +66,12 @@ export interface FleetSink {
 	): void;
 	/** A per-robot detail channel (battery, alarms…) came up or went down. */
 	link(robot: string, up: boolean): void;
+	/**
+	 * The fleet's (merged) map, whenever it changes — e.g. as multi-robot SLAM
+	 * grows it. The gateway dedupes and throttles, so call it as often as
+	 * convenient.
+	 */
+	map(grid: MapGrid): void;
 	/** The fleet source itself is gone: every robot's state is unknown from now. */
 	lost(): void;
 }

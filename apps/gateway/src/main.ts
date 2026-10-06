@@ -3,15 +3,19 @@
 // it live to browsers over a WebSocket on the same port, in one neutral
 // protocol (see LiveMessage) — so the UI never knows which robots it shows.
 import http from "node:http";
-import type { FleetSink, StartAdapter } from "@aibot/fleet-adapter";
+import type { FleetSink, MapGrid, StartAdapter } from "@aibot/fleet-adapter";
 import { WebSocketServer } from "ws";
 import { type Days, openHistory } from "./history.ts";
+import { mapPng, mapVersion, mapYaml, validGrid } from "./map.ts";
 
 const PORT = Number(process.env.WS_PORT ?? 8787);
 const HISTORY_DB = process.env.HISTORY_DB ?? "history.db";
 // 30-day view + the previous 30 days its deltas compare against.
 const HISTORY_DAYS = Number(process.env.HISTORY_DAYS ?? 62);
 const ADAPTER = process.env.FLEET_ADAPTER ?? "sim";
+// ponytail: SLAM may republish the map every second; re-encoding the PNG and
+// making every browser reload it at that rate is waste. Raise for big maps.
+const MAP_MIN_MS = 2000;
 
 /** What browsers receive (apps/web/src/features/live/fleet.ts reads it). */
 export type LiveMessage =
@@ -39,7 +43,8 @@ export type LiveMessage =
 			robot: string;
 			alarms: { code: string; level: string; text: string }[];
 	  }
-	| { type: "link"; robot: string; up: boolean };
+	| { type: "link"; robot: string; up: boolean }
+	| { type: "map"; version: string };
 
 const history = openHistory(HISTORY_DB);
 history.prune(HISTORY_DAYS, Date.now());
@@ -49,6 +54,21 @@ const server = http.createServer((req, res) => {
 	// The dashboard is served from another origin on the LAN.
 	res.setHeader("Access-Control-Allow-Origin", "*");
 	const url = new URL(req.url ?? "/", "http://gateway");
+	if (url.pathname === "/map/map.yaml" || url.pathname === "/map/map.png") {
+		if (!mapFiles) {
+			res.writeHead(404).end("no map yet");
+			return;
+		}
+		const png = url.pathname.endsWith(".png");
+		res
+			.writeHead(200, {
+				"Content-Type": png ? "image/png" : "text/yaml",
+				// The map changes under SLAM; the WS "map" message says when.
+				"Cache-Control": "no-store",
+			})
+			.end(png ? mapFiles.png : mapFiles.yaml);
+		return;
+	}
 	if (url.pathname !== "/history") {
 		res.writeHead(404).end();
 		return;
@@ -103,6 +123,34 @@ function safely(what: string, f: () => void) {
 	}
 }
 
+/** The latest map as served files; null until an adapter reports one. */
+let mapFiles: { yaml: string; png: Buffer; version: string } | null = null;
+let pendingMap: MapGrid | null = null;
+let mapTimer: ReturnType<typeof setTimeout> | null = null;
+let lastMapAt = 0;
+
+/** Encodes at most every MAP_MIN_MS, always ending on the latest grid. */
+function queueMap(grid: MapGrid) {
+	pendingMap = grid;
+	if (mapTimer) return;
+	mapTimer = setTimeout(
+		() => {
+			mapTimer = null;
+			const g = pendingMap;
+			pendingMap = null;
+			if (!g) return;
+			safely("map", () => {
+				const version = mapVersion(g);
+				if (mapFiles?.version === version) return;
+				mapFiles = { yaml: mapYaml(g), png: mapPng(g), version };
+				lastMapAt = Date.now();
+				send({ type: "map", version });
+			});
+		},
+		Math.max(0, lastMapAt + MAP_MIN_MS - Date.now()),
+	);
+}
+
 const sink: FleetSink = {
 	state(robot, s) {
 		safely("state", () => history.state(robot, Date.now(), s));
@@ -145,6 +193,10 @@ const sink: FleetSink = {
 	link(robot, up) {
 		console.log(`[gateway] ${robot} detail link ${up ? "up" : "down"}`);
 		send({ type: "link", robot, up });
+	},
+	map(grid) {
+		if (validGrid(grid)) queueMap(grid);
+		else console.warn("[gateway] map: grid size doesn't match its data");
 	},
 	lost() {
 		safely("lost", () => history.markAllOffline(Date.now()));
