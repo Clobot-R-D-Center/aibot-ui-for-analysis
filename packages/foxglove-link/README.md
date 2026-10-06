@@ -26,7 +26,12 @@ links.update("robot-1", "192.168.0.11", true); // whenever reachability is known
 ## On each robot
 
 The gateway connects to every robot it should read from, so each one runs
-the bridge, reachable from the gateway PC:
+the bridge, reachable from the gateway PC.
+
+foxglove_bridge ships as a prebuilt ROS package (`ros-<distro>-foxglove-bridge`
+for Humble, Jazzy, Kilted and Rolling). You install and configure it; there is
+nothing to write or build. Its source moved into the foxglove-sdk repository,
+but you don't need the SDK to run it.
 
 ```bash
 sudo apt install ros-$ROS_DISTRO-foxglove-bridge
@@ -44,4 +49,6 @@ ros2 launch foxglove_bridge foxglove_bridge_launch.xml \
 - The bridge listens on all interfaces (`address` `0.0.0.0`). Keep it to the
   robots' LAN, or put a firewall in front.
 
-See the bridge's README for all parameters.
+The other parameters (threads, QoS, TLS, sysinfo…) can stay at their
+defaults. The [bridge's README](https://github.com/foxglove/foxglove-sdk/tree/main/ros/src/foxglove_bridge)
+lists them all.
