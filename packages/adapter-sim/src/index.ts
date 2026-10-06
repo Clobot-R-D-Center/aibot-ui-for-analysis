@@ -3,6 +3,9 @@
 // and failures, obstacle stops, waits, errors with alarms, battery drain and
 // charge, and one robot that drops offline now and then — enough to exercise
 // every panel without real robots. It's also the reference adapter.
+//
+// The map is "SLAM'd" too: the world starts unknown and fills in around each
+// robot as it drives, so the dashboard's live map updates can be seen.
 import type {
 	Alarm,
 	FleetSink,
@@ -45,6 +48,26 @@ function loop(pts: XY[]): Route {
 			return pts[0];
 		},
 	};
+}
+
+/** The simulated world: what SLAM would eventually discover. */
+const WORLD = { minX: -25, minY: -3, maxX: 2, maxY: 15, res: 0.1 };
+const REVEAL_M = 4.5; // sensor range: cells this close to a robot become known
+const COLS = Math.round((WORLD.maxX - WORLD.minX) / WORLD.res);
+const ROWS = Math.round((WORLD.maxY - WORLD.minY) / WORLD.res);
+
+/** True occupancy at a point: outer walls, two inner walls and a box, clear of the routes. */
+function wall(x: number, y: number): boolean {
+	const edge = 0.2;
+	return (
+		x < WORLD.minX + edge ||
+		x > WORLD.maxX - edge ||
+		y < WORLD.minY + edge ||
+		y > WORLD.maxY - edge ||
+		(Math.abs(y - 8) < 0.15 && x < -12) || // corridor wall
+		(Math.abs(x + 12) < 0.15 && y < 4) || // room divider
+		(x > -21 && x < -19 && y > 10 && y < 11.5) // a crate
+	);
 }
 
 const TICK = 100; // ms
@@ -123,6 +146,33 @@ const start: StartAdapter = (sink: FleetSink) => {
 
 	for (const b of bots) sink.link(b.name, true);
 
+	// SLAM'd map: -1 until a robot has been within REVEAL_M, then the truth.
+	const grid = new Int8Array(COLS * ROWS).fill(-1);
+	const reveal = (x: number, y: number) => {
+		let changed = false;
+		const r = Math.ceil(REVEAL_M / WORLD.res);
+		const c0 = Math.floor((x - WORLD.minX) / WORLD.res);
+		const r0 = Math.floor((y - WORLD.minY) / WORLD.res);
+		for (let row = Math.max(0, r0 - r); row < Math.min(ROWS, r0 + r); row++)
+			for (let col = Math.max(0, c0 - r); col < Math.min(COLS, c0 + r); col++) {
+				const i = row * COLS + col;
+				if (grid[i] !== -1 || (col - c0) ** 2 + (row - r0) ** 2 > r * r)
+					continue;
+				const cx = WORLD.minX + (col + 0.5) * WORLD.res;
+				const cy = WORLD.minY + (row + 0.5) * WORLD.res;
+				grid[i] = wall(cx, cy) ? 100 : 0;
+				changed = true;
+			}
+		return changed;
+	};
+	const mapGrid = {
+		resolution: WORLD.res,
+		origin: { x: WORLD.minX, y: WORLD.minY, yaw: 0 },
+		width: COLS,
+		height: ROWS,
+		data: grid,
+	};
+
 	let ticks = 0;
 	const timer = setInterval(() => {
 		const t = Date.now();
@@ -199,6 +249,14 @@ const start: StartAdapter = (sink: FleetSink) => {
 			}),
 		);
 		if (ticks % 5 === 0) for (const b of online) sink.plan(b.name, plan(b));
+		if (ticks % 10 === 0) {
+			let grew = false;
+			for (const b of online) {
+				const [x, y] = b.route.at(b.s);
+				grew = reveal(x, y) || grew;
+			}
+			if (grew) sink.map(mapGrid);
+		}
 		if (ticks % 10 === 0)
 			for (const b of bots) {
 				sink.state(b.name, {
