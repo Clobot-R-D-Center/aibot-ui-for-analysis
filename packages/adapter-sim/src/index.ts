@@ -6,6 +6,7 @@
 //
 // The map is "SLAM'd" too: the world starts unknown and fills in around each
 // robot as it drives, so the dashboard's live map updates can be seen.
+// SIM_REMAP_MS=<ms> restarts the mapping that often (a new mapping session).
 import type {
 	Alarm,
 	FleetSink,
@@ -90,7 +91,8 @@ interface Bot {
 	nextDrop: number;
 }
 
-const start: StartAdapter = (sink: FleetSink) => {
+const start: StartAdapter = (sink: FleetSink, env) => {
+	const remapMs = Number(env.SIM_REMAP_MS ?? 0);
 	const now = Date.now();
 	const bot = (name: string, route: Route, flaky?: [number, number]): Bot => ({
 		name,
@@ -171,9 +173,12 @@ const start: StartAdapter = (sink: FleetSink) => {
 		width: COLS,
 		height: ROWS,
 		data: grid,
+		session: "sim-run-1",
 	};
 
 	let ticks = 0;
+	let nextRemap = Date.now() + remapMs;
+	let run = 1;
 	const timer = setInterval(() => {
 		const t = Date.now();
 		ticks++;
@@ -249,6 +254,11 @@ const start: StartAdapter = (sink: FleetSink) => {
 			}),
 		);
 		if (ticks % 5 === 0) for (const b of online) sink.plan(b.name, plan(b));
+		if (remapMs > 0 && t >= nextRemap) {
+			nextRemap = t + remapMs;
+			grid.fill(-1); // a new SLAM run: everything unknown again
+			mapGrid.session = `sim-run-${++run}`; // we know it restarted: say so
+		}
 		if (ticks % 10 === 0) {
 			let grew = false;
 			for (const b of online) {
