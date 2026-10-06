@@ -124,6 +124,12 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.1)(jsdom@29.1.1)(vite@8.1.3(@types/node@26.1.1)(jiti@2.7.0))
 
+  packages/adapter-sim:
+    dependencies:
+      '@aibot/fleet-adapter':
+        specifier: workspace:*
+        version: link:../fleet-adapter
+
   packages/fleet-adapter: {}
 
 packages:

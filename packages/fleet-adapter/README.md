@@ -34,3 +34,5 @@ and run the gateway with `FLEET_ADAPTER=<name>`.
   list, and the gateway records only newly raised ones.
 - Call `lost()` when your source disconnects. Robot states are unknown from then
   on, so that time isn't counted as uptime.
+
+`@aibot/adapter-sim` is a complete reference adapter.
