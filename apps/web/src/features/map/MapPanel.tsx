@@ -18,12 +18,13 @@ import {
 	DEFAULT_LAYERS,
 	getDemoPose,
 	getOverlays,
+	type HeatGrid,
 	type LayerKey,
 	type LayerVisibility,
 } from "./overlays/overlay-data";
 import { mapWorldRect } from "./ros-map";
 import { useTheme } from "./theme";
-import { useRosMap } from "./use-ros-map";
+import type { MapState } from "./use-ros-map";
 
 const iconBtn = "btn btn-square btn-sm shadow-sm";
 
@@ -35,17 +36,19 @@ function deg(rad: number) {
 }
 
 interface Props {
-	src: string;
+	/** loaded by the dashboard, which also needs the map (coverage) */
+	state: MapState;
+	onRetry: () => void;
 	/** selected robot; also seeds the demo overlays (and the demo pose without `live`) */
 	robotId: string;
 	/** live fleet; null/undefined → a single demo pose */
 	live?: FleetLive | null;
+	/** recorded coverage; replaces the demo heatmap */
+	heat?: HeatGrid;
 }
 
-export function MapPanel({ src, robotId, live }: Props) {
+export function MapPanel({ state, onRetry, robotId, live, heat }: Props) {
 	const theme = useTheme();
-	const [nonce, setNonce] = useState(0);
-	const state = useRosMap(src, nonce);
 	const apiRef = useRef<ViewApi | null>(null);
 	const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
 	const [layers, setLayers] = useState<LayerVisibility>(DEFAULT_LAYERS);
@@ -114,7 +117,7 @@ export function MapPanel({ src, robotId, live }: Props) {
 						map={ready}
 						robots={robots}
 						theme={theme}
-						overlays={spatial.overlays}
+						overlays={heat ? { ...spatial.overlays, heat } : spatial.overlays}
 						layers={layers}
 						apiRef={apiRef}
 						onCursor={setCursor}
@@ -161,10 +164,7 @@ export function MapPanel({ src, robotId, live }: Props) {
 
 			{state.status === "loading" && <LoadingOverlay />}
 			{state.status === "error" && (
-				<ErrorOverlay
-					message={state.message}
-					onRetry={() => setNonce((n) => n + 1)}
-				/>
+				<ErrorOverlay message={state.message} onRetry={onRetry} />
 			)}
 		</div>
 	);

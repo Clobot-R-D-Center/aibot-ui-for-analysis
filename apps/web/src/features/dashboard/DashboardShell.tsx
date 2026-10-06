@@ -1,9 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useFleetLive } from "#/features/live/use-fleet-live";
+import {
+	type CellGrid,
+	coveragePct,
+	heatFrom,
+	mapFreeGrid,
+} from "#/features/map/coverage";
 import { MapPanel } from "#/features/map/MapPanel";
+import { useRosMap } from "#/features/map/use-ros-map";
 import { m } from "#/paraglide/messages.js";
 import { AsyncContent } from "./AsyncContent";
-import { type RangeDays, ROBOTS } from "./demo-data";
+import { type Kpi, type RangeDays, ROBOTS, type RobotData } from "./demo-data";
 import { EventLog } from "./EventLog";
 import { KpiStrip } from "./KpiStrip";
 import { Panel } from "./Panel";
@@ -12,6 +19,22 @@ import { TrendChart } from "./TrendChart";
 import { useRobotData } from "./use-robot-data";
 
 const MAP_SRC = "/demo-map";
+
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
+/** Live history leaves coverage to us (it needs the map); demo data has it already. */
+function withCoverage(data: RobotData, grid: CellGrid | null): Kpi[] {
+	if (!data.cells || !grid) return data.kpis;
+	const cur = coveragePct(grid, data.cells);
+	const prev = coveragePct(grid, data.prevCells ?? []);
+	const coverage: Kpi = {
+		key: "coverage",
+		value: round1(cur),
+		unit: "%",
+		delta: prev > 0 ? round1(((cur - prev) / prev) * 100) : 0,
+	};
+	return [coverage, ...data.kpis];
+}
 
 export function DashboardShell() {
 	const live = useFleetLive();
@@ -25,10 +48,24 @@ export function DashboardShell() {
 		: (robots[0]?.id ?? picked);
 	const [range, setRange] = useState<RangeDays>(7);
 	const { state, retry } = useRobotData(robotId, range);
+	const [mapNonce, setMapNonce] = useState(0);
+	const map = useRosMap(MAP_SRC, mapNonce);
 
 	const ready = state.status === "ready" ? state.data : null;
 	const lastDistance = ready?.distance.at(-1)?.value ?? 0;
 	const lastRun = ready?.run.at(-1)?.value ?? 0;
+
+	const cell = ready?.cell;
+	const loaded = map.status === "ready" ? map.map : null;
+	// ponytail: reads every map pixel once per map/cell size (~ms for a few Mpx)
+	const grid = useMemo(
+		() => (loaded && cell ? mapFreeGrid(loaded, cell) : null),
+		[loaded, cell],
+	);
+	const heat = useMemo(
+		() => (grid && ready?.cells ? heatFrom(grid, ready.cells) : undefined),
+		[grid, ready],
+	);
 
 	return (
 		<div className="flex h-[100dvh] flex-col bg-canvas text-ink">
@@ -47,12 +84,18 @@ export function DashboardShell() {
 						onRetry={retry}
 						skeleton={<KpiSkeleton />}
 					>
-						{(data) => <KpiStrip kpis={data.kpis} />}
+						{(data) => <KpiStrip kpis={withCoverage(data, grid)} />}
 					</AsyncContent>
 
 					{/* Map hero — its own bordered panel, fills a tall band above the fold */}
 					<div className="h-[60vh] min-h-[380px]">
-						<MapPanel src={MAP_SRC} robotId={robotId} live={live} />
+						<MapPanel
+							state={map}
+							onRetry={() => setMapNonce((n) => n + 1)}
+							robotId={robotId}
+							live={live}
+							heat={heat}
+						/>
 					</div>
 
 					{/* Trends — scroll down for detail */}
