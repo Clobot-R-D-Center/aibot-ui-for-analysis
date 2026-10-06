@@ -1,6 +1,13 @@
 import { MapControls, OrthographicCamera } from "@react-three/drei";
 import { type ThreeEvent, useThree } from "@react-three/fiber";
-import { type RefObject, useCallback, useEffect, useMemo, useRef } from "react";
+import {
+	type RefObject,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { OccupancyLayer } from "./OccupancyLayer";
 import { HeatmapLayer } from "./overlays/HeatmapLayer";
 import type { LayerVisibility, Overlays, XY } from "./overlays/overlay-data";
@@ -50,13 +57,10 @@ function CameraRig({
 		invalidate();
 	}, [gl, camera, controls, invalidate, rect]);
 
-	// Auto-fit exactly once per map, after controls exist and layout settles.
-	// The reset button re-fits on demand; nothing else re-frames the view.
+	// Auto-fit exactly once, after controls exist and layout settles. Not again
+	// when the map grows (SLAM): that would yank away a view the user panned.
+	// The reset button re-fits on demand.
 	const fitted = useRef(false);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: reset the guard when the map changes
-	useEffect(() => {
-		fitted.current = false;
-	}, [rect]);
 	useEffect(() => {
 		if (fitted.current || !controls) return;
 		fitView();
@@ -122,16 +126,18 @@ export function MapScene({
 	// biome-ignore lint/correctness/useExhaustiveDependencies: these are the change triggers
 	useEffect(() => invalidate(), [invalidate, theme, robots, layers, overlays]);
 
-	// Stable array refs so r3f/drei apply them once, never re-applying (and
-	// snapping the camera back) on later re-renders.
-	const initialPos = useMemo<[number, number, number]>(
-		() => [rect.centerX, rect.centerY, 10],
-		[rect],
-	);
-	const initialTarget = useMemo<[number, number, number]>(
-		() => [rect.centerX, rect.centerY, 0],
-		[rect],
-	);
+	// Fixed at the first map, so r3f/drei apply them once and never snap the
+	// camera back — not on re-renders, nor when a growing (SLAM) map moves rect.
+	const [initialPos] = useState<[number, number, number]>(() => [
+		rect.centerX,
+		rect.centerY,
+		10,
+	]);
+	const [initialTarget] = useState<[number, number, number]>(() => [
+		rect.centerX,
+		rect.centerY,
+		0,
+	]);
 
 	const handleMove = (e: ThreeEvent<PointerEvent>) => {
 		e.stopPropagation();

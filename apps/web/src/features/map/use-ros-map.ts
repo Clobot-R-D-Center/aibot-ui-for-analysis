@@ -20,6 +20,9 @@ function loadImage(
 	return new Promise((resolve, reject) => {
 		const img = new Image();
 		img.decoding = "async";
+		// The map may come from the gateway's origin; without CORS the canvas we
+		// draw it on is tainted and getImageData (recolor, coverage) throws.
+		img.crossOrigin = "anonymous";
 		img.onload = () => resolve(img);
 		img.onerror = () => reject(new Error(`Could not load image: ${url}`));
 		signal.addEventListener("abort", () =>
@@ -31,15 +34,25 @@ function loadImage(
 
 /**
  * Loads a ROS map from a directory holding `map.yaml` + its image.
- * `nonce` forces a reload (retry). Mirrors dropping in real map_server output.
+ * `nonce` forces a reload (retry, or a new map version). `baseUrl` null = no
+ * map yet (stays loading). A reload keeps showing the current map until the
+ * new one is in — and keeps it if the reload fails — so a map that SLAM keeps
+ * growing updates in place instead of blinking.
  */
-export function useRosMap(baseUrl: string, nonce = 0): MapState {
+export function useRosMap(
+	baseUrl: string | null,
+	nonce: number | string = 0,
+): MapState {
 	const [state, setState] = useState<MapState>({ status: "loading" });
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: `nonce` is the retry trigger
 	useEffect(() => {
+		if (!baseUrl) {
+			setState({ status: "loading" });
+			return;
+		}
 		const ctrl = new AbortController();
-		setState({ status: "loading" });
+		setState((s) => (s.status === "ready" ? s : { status: "loading" }));
 
 		(async () => {
 			try {
@@ -60,7 +73,10 @@ export function useRosMap(baseUrl: string, nonce = 0): MapState {
 				});
 			} catch (err) {
 				if ((err as Error).name === "AbortError") return;
-				setState({ status: "error", message: (err as Error).message });
+				const message = (err as Error).message;
+				setState((s) =>
+					s.status === "ready" ? s : { status: "error", message },
+				);
 			}
 		})();
 

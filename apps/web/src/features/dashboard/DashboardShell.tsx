@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useFleetLive } from "#/features/live/use-fleet-live";
+import { MAP_URL, useFleetLive } from "#/features/live/use-fleet-live";
 import {
 	type CellGrid,
 	coveragePct,
@@ -18,7 +18,7 @@ import { TopBar } from "./TopBar";
 import { TrendChart } from "./TrendChart";
 import { useRobotData } from "./use-robot-data";
 
-const MAP_SRC = "/demo-map";
+const DEMO_MAP = "/demo-map";
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
@@ -49,7 +49,11 @@ export function DashboardShell() {
 	const [range, setRange] = useState<RangeDays>(7);
 	const { state, retry } = useRobotData(robotId, range);
 	const [mapNonce, setMapNonce] = useState(0);
-	const map = useRosMap(MAP_SRC, mapNonce);
+	// Live: the gateway's map, reloaded whenever its version changes (SLAM).
+	const map = useRosMap(
+		live ? live.mapVersion && (MAP_URL ?? null) : DEMO_MAP,
+		`${live?.mapVersion}:${mapNonce}`,
+	);
 
 	const ready = state.status === "ready" ? state.data : null;
 	const lastDistance = ready?.distance.at(-1)?.value ?? 0;
