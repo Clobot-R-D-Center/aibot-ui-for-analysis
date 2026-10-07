@@ -26,7 +26,15 @@ const config = defineConfig({
 				},
 			],
 		}),
-		devtools(),
+		devtools({
+			// Source injection adds data-tsd-source to every JSX element; React
+			// Three Fiber reads a dashed prop as a nested path (data.tsd.source)
+			// and throws. Skip the files that render three.js scenes.
+			injectSource: {
+				enabled: true,
+				ignore: { files: [/\/src\/features\/map\/(?!MapPanel\.tsx)/] },
+			},
+		}),
 		tailwindcss(),
 		tanstackRouter({ target: "react", autoCodeSplitting: true }),
 		viteReact(),
