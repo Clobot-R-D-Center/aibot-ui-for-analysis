@@ -1,6 +1,6 @@
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { m } from "#/paraglide/messages.js";
-import type { Kpi, KpiKey } from "./demo-data";
+import type { Kpi, KpiKey } from "./robot-data";
 
 const LABEL: Record<KpiKey, () => string> = {
 	coverage: () => m.kpi_coverage(),

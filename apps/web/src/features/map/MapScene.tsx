@@ -10,9 +10,8 @@ import {
 } from "react";
 import { OccupancyLayer } from "./OccupancyLayer";
 import { HeatmapLayer } from "./overlays/HeatmapLayer";
-import type { LayerVisibility, Overlays, XY } from "./overlays/overlay-data";
+import type { HeatGrid, LayerVisibility, XY } from "./overlays/overlay-data";
 import { PathLayer } from "./overlays/PathLayer";
-import { ZonesLayer } from "./overlays/ZonesLayer";
 import { RobotMarker } from "./RobotMarker";
 import { mapWorldRect, type RobotPose } from "./ros-map";
 import type { Theme } from "./theme";
@@ -99,7 +98,7 @@ interface Props {
 	map: LoadedMap;
 	robots: MapRobot[];
 	theme: Theme;
-	overlays: Overlays;
+	heat: HeatGrid;
 	layers: LayerVisibility;
 	apiRef: RefObject<ViewApi | null>;
 	onCursor: (world: { x: number; y: number } | null) => void;
@@ -111,7 +110,7 @@ export function MapScene({
 	map,
 	robots,
 	theme,
-	overlays,
+	heat,
 	layers,
 	apiRef,
 	onCursor,
@@ -127,7 +126,7 @@ export function MapScene({
 
 	// Re-render on any visual change (demand frameloop): theme, poses, layers.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: these are the change triggers
-	useEffect(() => invalidate(), [invalidate, theme, robots, layers, overlays]);
+	useEffect(() => invalidate(), [invalidate, theme, robots, layers, heat]);
 
 	// Fixed at the first map, so r3f/drei apply them once and never snap the
 	// camera back — not on re-renders, nor when a growing (SLAM) map moves rect.
@@ -173,13 +172,12 @@ export function MapScene({
 			/>
 			{layers.heatmap && (
 				<HeatmapLayer
-					heat={overlays.heat}
+					heat={heat}
 					meta={map.meta}
 					widthPx={map.widthPx}
 					heightPx={map.heightPx}
 				/>
 			)}
-			{layers.zones && <ZonesLayer zones={overlays.zones} theme={theme} />}
 			{layers.path &&
 				robots.map(
 					(r) =>

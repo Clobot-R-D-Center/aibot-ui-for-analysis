@@ -1,7 +1,7 @@
 import { MapPin, Moon, Sun } from "lucide-react";
 import { toggleTheme, useTheme } from "#/features/map/theme";
 import { m } from "#/paraglide/messages.js";
-import { RANGES, type RangeDays } from "./demo-data";
+import { RANGES, type RangeDays } from "./robot-data";
 
 interface Props {
 	range: RangeDays;

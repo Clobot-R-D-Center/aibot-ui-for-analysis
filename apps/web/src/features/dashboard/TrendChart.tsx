@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Point } from "./demo-data";
+import type { Point } from "./robot-data";
 
 interface Props {
 	points: Point[];

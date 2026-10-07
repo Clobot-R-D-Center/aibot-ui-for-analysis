@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
-import { HISTORY_URL } from "#/features/live/use-fleet-live";
 import {
 	type AsyncState,
 	fetchRobotData,
 	type RangeDays,
 	type RobotData,
-} from "./demo-data";
+} from "./robot-data";
 
-/** Live history keeps growing, so it's re-read in the background; demo data doesn't change. */
-const REFRESH_MS = HISTORY_URL ? 60_000 : 0;
+/** History keeps growing, so it's re-read in the background. */
+const REFRESH_MS = 60_000;
 
 /**
  * Loads robot data behind the async boundary. Mirrors useRosMap. A change of
@@ -30,8 +29,9 @@ export function useRobotData(
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: `nonce` and `key` are reload triggers
 	useEffect(() => {
-		const ctrl = new AbortController();
 		setState({ status: "loading" });
+		if (!robotId) return; // no robot yet (the fleet hasn't reported a pose)
+		const ctrl = new AbortController();
 		// A background refresh never flips to loading/error: the panels keep
 		// what they show, and a later refresh (or retry) can still succeed.
 		const load = (background: boolean) =>

@@ -20,18 +20,18 @@ import { m } from "#/paraglide/messages.js";
 import { type MapRobot, MapScene, type ViewApi } from "./MapScene";
 import {
 	DEFAULT_LAYERS,
-	getDemoPose,
-	getOverlays,
 	type HeatGrid,
 	type LayerKey,
 	type LayerVisibility,
 } from "./overlays/overlay-data";
 import { type RobotChoice, RobotsPanel } from "./RobotsPanel";
-import { mapWorldRect } from "./ros-map";
 import { useTheme } from "./theme";
 import type { MapState } from "./use-ros-map";
 
 const iconBtn = "btn btn-square btn-sm shadow-sm";
+
+/** Nothing recorded (yet): an empty heatmap. */
+const NO_HEAT: HeatGrid = { cols: 1, rows: 1, data: new Float32Array(1) };
 
 function fmt(n: number) {
 	return n.toFixed(2);
@@ -44,14 +44,13 @@ interface Props {
 	/** loaded by the dashboard, which also needs the map (coverage) */
 	state: MapState;
 	onRetry: () => void;
-	/** selected robot; also seeds the demo overlays (and the demo pose without `live`) */
+	/** selected robot */
 	robotId: string;
-	/** robots to pick from (live: those with a pose; demo: the demo fleet) */
+	/** robots to pick from (those with a pose) */
 	choices: { id: string; name: string }[];
 	onSelect: (id: string) => void;
-	/** live fleet; null/undefined → a single demo pose */
-	live?: FleetLive | null;
-	/** recorded coverage; replaces the demo heatmap */
+	live: FleetLive;
+	/** recorded coverage of the selected robot */
 	heat?: HeatGrid;
 }
 
@@ -70,56 +69,31 @@ export function MapPanel({
 	const [layers, setLayers] = useState<LayerVisibility>(DEFAULT_LAYERS);
 	const toggle = (k: LayerKey) => setLayers((l) => ({ ...l, [k]: !l[k] }));
 
-	// Demo pose + overlays sized to the LOADED map's world bounds, so they land
-	// sensibly on whatever map is loaded (not the old hard-coded demo geometry).
 	const ready = state.status === "ready" ? state.map : null;
-	const spatial = useMemo(() => {
-		if (!ready) return null;
-		const r = mapWorldRect(ready.meta, ready.widthPx, ready.heightPx);
-		const bounds = {
-			minX: r.centerX - r.width / 2,
-			maxX: r.centerX + r.width / 2,
-			minY: r.centerY - r.height / 2,
-			maxY: r.centerY + r.height / 2,
-		};
-		return {
-			pose: getDemoPose(robotId, bounds),
-			overlays: getOverlays(robotId, bounds),
-		};
-	}, [ready, robotId]);
 
 	// Selected robot sorted last so it draws on top of the others.
-	const robots = useMemo<MapRobot[]>(() => {
-		if (!spatial) return [];
-		if (!live)
-			return [
-				{
-					id: robotId,
-					pose: spatial.pose,
-					selected: true,
-					stale: false,
-					plan: spatial.overlays.path,
-				},
-			];
-		return live.robots
-			.flatMap((r) =>
-				r.pose
-					? [
-							{
-								id: r.name,
-								pose: r.pose,
-								selected: r.name === robotId,
-								stale: r.stale,
-								plan: r.plan,
-							},
-						]
-					: [],
-			)
-			.sort((a, b) => Number(a.selected) - Number(b.selected));
-	}, [spatial, live, robotId]);
+	const robots = useMemo<MapRobot[]>(
+		() =>
+			live.robots
+				.flatMap((r) =>
+					r.pose
+						? [
+								{
+									id: r.name,
+									pose: r.pose,
+									selected: r.name === robotId,
+									stale: r.stale,
+									plan: r.plan,
+								},
+							]
+						: [],
+				)
+				.sort((a, b) => Number(a.selected) - Number(b.selected)),
+		[live, robotId],
+	);
 	const selected = robots.find((r) => r.selected) ?? null;
 	const panelRobots = useMemo<RobotChoice[]>(() => {
-		const byName = new Map(live?.robots.map((r) => [r.name, r]));
+		const byName = new Map(live.robots.map((r) => [r.name, r]));
 		return choices.map(({ id, name }) => {
 			const r = byName.get(id);
 			if (!r) return { id, name };
@@ -138,11 +112,11 @@ export function MapPanel({
 			};
 		});
 	}, [choices, live]);
-	const detail = live?.robots.find((r) => r.name === robotId) ?? null;
+	const detail = live.robots.find((r) => r.name === robotId) ?? null;
 
 	return (
 		<div className="relative h-full w-full overflow-hidden rounded-xl border border-border bg-canvas text-ink">
-			{ready && spatial && (
+			{ready && (
 				<Canvas
 					flat
 					frameloop="demand"
@@ -155,7 +129,7 @@ export function MapPanel({
 						robots={robots}
 						onSelect={onSelect}
 						theme={theme}
-						overlays={heat ? { ...spatial.overlays, heat } : spatial.overlays}
+						heat={heat ?? NO_HEAT}
 						layers={layers}
 						apiRef={apiRef}
 						onCursor={setCursor}
@@ -163,7 +137,7 @@ export function MapPanel({
 				</Canvas>
 			)}
 
-			{ready && spatial && (
+			{ready && (
 				<>
 					<RobotsPanel
 						robots={panelRobots}
@@ -250,20 +224,6 @@ const TOGGLES: Array<{
 				style={{
 					background:
 						"linear-gradient(90deg, #440154, #21918c, #5ec962, #fde725)",
-				}}
-				aria-hidden
-			/>
-		),
-	},
-	{
-		key: "zones",
-		label: () => m.legend_zones(),
-		swatch: (
-			<span
-				className="size-3.5 rounded-sm border"
-				style={{
-					borderColor: "var(--data-4)",
-					background: "color-mix(in oklch, var(--data-4) 16%, transparent)",
 				}}
 				aria-hidden
 			/>

@@ -10,23 +10,21 @@ import { MapPanel } from "#/features/map/MapPanel";
 import { useRosMap } from "#/features/map/use-ros-map";
 import { m } from "#/paraglide/messages.js";
 import { AsyncContent } from "./AsyncContent";
-import { type Kpi, type RangeDays, ROBOTS, type RobotData } from "./demo-data";
 import { EventLog } from "./EventLog";
 import { KpiStrip } from "./KpiStrip";
 import { Panel } from "./Panel";
+import type { Kpi, RangeDays, RobotData } from "./robot-data";
 import { TopBar } from "./TopBar";
 import { TrendChart } from "./TrendChart";
 import { useRobotData } from "./use-robot-data";
 
-const DEMO_MAP = "/demo-map";
-
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
-/** Live history leaves coverage to us (it needs the map); demo data has it already. */
+/** History leaves coverage to us: it needs the map. */
 function withCoverage(data: RobotData, grid: CellGrid | null): Kpi[] {
-	if (!data.cells || !grid) return data.kpis;
+	if (!grid) return data.kpis;
 	const cur = coveragePct(grid, data.cells);
-	const prev = coveragePct(grid, data.prevCells ?? []);
+	const prev = coveragePct(grid, data.prevCells);
 	const coverage: Kpi = {
 		key: "coverage",
 		value: round1(cur),
@@ -40,26 +38,24 @@ export function DashboardShell() {
 	const live = useFleetLive();
 	// Only what can be shown on the map: a fleet source may also report
 	// participants that never send a pose (e.g. a central planner).
-	const robots = live
-		? live.robots
-				.filter((r) => r.pose)
-				.map((r) => ({ id: r.name, name: r.name }))
-		: ROBOTS;
-	const [picked, setPicked] = useState(ROBOTS[0].id);
+	const robots = live.robots
+		.filter((r) => r.pose)
+		.map((r) => ({ id: r.name, name: r.name }));
+	const [picked, setPicked] = useState("");
 	// Live list arrives after first render; fall back to its first robot.
 	const robotId = robots.some((r) => r.id === picked)
 		? picked
-		: (robots[0]?.id ?? picked);
+		: (robots[0]?.id ?? "");
 	const [range, setRange] = useState<RangeDays>(7);
 	// A new mapping session changes which coverage cells apply: reload then.
 	const { state, retry } = useRobotData(robotId, range, {
-		key: live?.mapSession ?? "",
+		key: live.mapSession ?? "",
 	});
 	const [mapNonce, setMapNonce] = useState(0);
-	// Live: the gateway's map, reloaded whenever its version changes (SLAM).
+	// The gateway's map, reloaded whenever its version changes (SLAM).
 	const map = useRosMap(
-		live ? live.mapVersion && (MAP_URL ?? null) : DEMO_MAP,
-		`${live?.mapVersion}:${mapNonce}`,
+		live.mapVersion ? MAP_URL : null,
+		`${live.mapVersion}:${mapNonce}`,
 	);
 
 	const ready = state.status === "ready" ? state.data : null;
@@ -74,7 +70,7 @@ export function DashboardShell() {
 		[loaded, cell],
 	);
 	const heat = useMemo(
-		() => (grid && ready?.cells ? heatFrom(grid, ready.cells) : undefined),
+		() => (grid && ready ? heatFrom(grid, ready.cells) : undefined),
 		[grid, ready],
 	);
 

@@ -119,7 +119,7 @@ Chrome uses **daisyUI** components; the map/data layer is **custom** (r3f / SVG)
 ### Custom (map + data — daisyUI does not cover these)
 - **Map canvas** (react-three-fiber, orthographic top-down): occupancy grid recolored to the theme (free/wall/unknown), pan/zoom, auto-fit-once (reset button re-frames; never on resize).
 - **Robot marker**: disc + heading chevron + halo, to scale, in `--robot`.
-- **Overlay layers** (toggleable via the Layers panel): **path** (drei Line, `--data-2`), **coverage heatmap** (viridis DataTexture), **zones** (translucent fill + border + label, `--data-*`).
+- **Overlay layers** (toggleable via the Layers panel): **path** (drei Line, `--data-2`), **coverage heatmap** (viridis DataTexture). Zones return once a fleet source reports them.
 - **Trend chart**: single-series SVG area+line — recessive grid, 2px non-scaling stroke, hover crosshair+tooltip, `--data-*` series, `.tnum` labels.
 - **Event log**: icon + color + label rows (identity never color-alone) with tabular times.
 - **Coordinate readout / Layers panel**: floating HUD over the map.

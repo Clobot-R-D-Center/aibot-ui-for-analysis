@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchRobotData, type RobotData } from "./demo-data";
+import { fetchRobotData, type RobotData } from "./robot-data";
 import { useRobotData } from "./use-robot-data";
 
-vi.mock("./demo-data", async (orig) => ({
-	...(await orig<typeof import("./demo-data")>()),
+vi.mock("./robot-data", async (orig) => ({
+	...(await orig<typeof import("./robot-data")>()),
 	fetchRobotData: vi.fn(),
 }));
 

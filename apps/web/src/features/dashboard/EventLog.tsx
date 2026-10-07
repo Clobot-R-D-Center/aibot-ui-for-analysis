@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import type { ComponentType, CSSProperties } from "react";
 import { m } from "#/paraglide/messages.js";
-import type { EventKind, RobotEvent } from "./demo-data";
+import type { EventKind, RobotEvent } from "./robot-data";
 
 type IconCmp = ComponentType<{ className?: string; style?: CSSProperties }>;
 

@@ -1,7 +1,7 @@
 import { RotateCcw, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { m } from "#/paraglide/messages.js";
-import type { AsyncState } from "./demo-data";
+import type { AsyncState } from "./robot-data";
 
 interface Props<T> {
 	state: AsyncState<T>;

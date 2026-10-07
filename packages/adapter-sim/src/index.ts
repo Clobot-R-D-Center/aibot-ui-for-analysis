@@ -1,5 +1,5 @@
-// Simulated fleet: three robots looping routes on the demo floor plan
-// (apps/web/public/demo-map), cycling through runs and idles, task successes
+// Simulated fleet: three robots looping routes in a small simulated world,
+// cycling through runs and idles, task successes
 // and failures, obstacle stops, waits, errors with alarms, battery drain and
 // charge, and one robot that drops offline now and then — enough to exercise
 // every panel without real robots. It's also the reference adapter.

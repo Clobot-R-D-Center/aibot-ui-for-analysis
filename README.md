@@ -17,7 +17,7 @@ AI 서비스 로봇의 위치, 운행 상태, 이력을 지도 위에서 보고 
 
 - 브라우저는 **gateway 하나에만** 연결합니다. 로봇이나 로봇 쪽 브로커에 직접 연결하지 않습니다.
 - gateway는 어댑터가 보고한 데이터를 기록하고, 하나의 **중립 프로토콜**로 웹에 전달합니다. 그래서 다른 로봇 스택을 붙일 때도 어댑터 하나만 새로 쓰면 되고, 웹과 gateway는 바뀌지 않습니다.
-- gateway 없이 웹만 실행하면 내장 데모 데이터로 동작합니다.
+- 웹은 항상 gateway에 연결합니다. 로봇이 없을 때는 gateway의 **시뮬레이터 어댑터**가 가상 로봇을 만들어 줍니다.
 
 ## 시작하기
 
@@ -25,30 +25,21 @@ AI 서비스 로봇의 위치, 운행 상태, 이력을 지도 위에서 보고 
 pnpm install
 ```
 
-### 1. 데모 모드 (gateway 없이)
+### 1. 시뮬레이터로 실행 (로봇 없이)
 
 ```bash
-pnpm --filter web dev
+pnpm dev
 ```
 
-`http://localhost:3000`에서 데모 지도와 데모 데이터로 열립니다.
-
-### 2. 시뮬레이터로 실시간 모드
-
-로봇 없이 전체 흐름(실시간 위치, 계획 경로, 이력 KPI, SLAM 지도 갱신)을 확인할 수 있습니다.
-
-```bash
-pnpm --filter gateway start                                    # 시뮬레이터 어댑터 (기본값)
-VITE_GATEWAY_URL=ws://localhost:8787 pnpm --filter web dev     # 다른 터미널에서
-```
+웹(`http://localhost:3000`)과 gateway(시뮬레이터)가 함께 뜹니다. 로봇 없이 전체 흐름(실시간 위치, 계획 경로, 이력 KPI, SLAM 지도 갱신)을 확인할 수 있습니다.
 
 - 가상 로봇 3대가 운행·대기, 작업 성공·실패, 장애물 정지, 에러·알람, 배터리 변화를 흉내 냅니다. 한 대는 주기적으로 오프라인이 됩니다.
 - 지도는 처음에 "모르는 곳"이었다가 로봇이 지나간 주변부터 채워집니다(SLAM 흉내).
-- `SIM_REMAP_MS=60000`을 함께 주면 1분마다 지도 작업을 새로 시작합니다. 회차별 이력이 분리되는지 확인할 때 씁니다.
+- `SIM_REMAP_MS=60000 pnpm dev`로 실행하면 1분마다 지도 작업을 새로 시작합니다. 회차별 이력이 분리되는지 확인할 때 씁니다.
 
-루트의 `pnpm dev`는 웹과 gateway(시뮬레이터)를 함께 띄웁니다. 실시간 모드로 보려면 `VITE_GATEWAY_URL=ws://localhost:8787 pnpm dev`로 실행합니다.
+웹은 기본으로 자신이 열린 호스트의 8787 포트(`ws://<호스트>:8787`)에서 gateway를 찾습니다. gateway가 다른 PC에 있으면 `VITE_GATEWAY_URL`로 지정합니다.
 
-### 3. 실제 로봇에 연결
+### 2. 실제 로봇에 연결
 
 1. 로봇 스택에 맞는 어댑터를 준비합니다. 없으면 [`packages/fleet-adapter`](packages/fleet-adapter/README.md)의 안내를 따라 새로 만듭니다.
 2. gateway를 로봇과 같은 LAN의 PC에서 해당 어댑터로 실행합니다.
@@ -56,7 +47,7 @@ VITE_GATEWAY_URL=ws://localhost:8787 pnpm --filter web dev     # 다른 터미�
    FLEET_ADAPTER=<어댑터 이름> pnpm --filter gateway start
    ```
    로봇이나 브로커의 주소, 포트처럼 어댑터에 필요한 설정은 각 어댑터의 README를 확인하세요.
-3. 웹을 gateway 주소로 실행합니다.
+3. 웹을 실행합니다. gateway가 같은 PC에 있으면 그냥 `pnpm --filter web dev`, 다른 PC에 있으면 주소를 지정합니다.
    ```bash
    VITE_GATEWAY_URL=ws://<gateway PC 주소>:8787 pnpm --filter web dev
    ```
@@ -134,7 +125,7 @@ pnpm --filter gateway test
 
 `apps/web` 내부 주요 위치:
 
-- `src/features/dashboard`: KPI, 차트, 이벤트 로그와 데이터 경계(`demo-data.ts`의 `fetchRobotData`)
+- `src/features/dashboard`: KPI, 차트, 이벤트 로그와 이력 데이터(`robot-data.ts`의 `fetchRobotData`)
 - `src/features/map`: 지도 렌더링, 오버레이, 커버리지 계산
 - `src/features/live`: gateway 실시간 연결(`use-fleet-live.ts`)과 메시지 해석(`fleet.ts`)
 - `src/routes`: 파일 기반 라우트
