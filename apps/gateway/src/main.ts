@@ -6,7 +6,14 @@ import http from "node:http";
 import type { FleetSink, MapGrid, StartAdapter } from "@aibot/fleet-adapter";
 import { WebSocketServer } from "ws";
 import { type Days, openHistory } from "./history.ts";
-import { mapPng, mapStats, mapVersion, mapYaml, validGrid } from "./map.ts";
+import {
+	mapPng,
+	mapStats,
+	mapVersion,
+	mapYaml,
+	readMapFile,
+	validGrid,
+} from "./map.ts";
 
 const PORT = Number(process.env.WS_PORT ?? 8787);
 const HISTORY_DB = process.env.HISTORY_DB ?? "history.db";
@@ -125,6 +132,21 @@ function safely(what: string, f: () => void) {
 
 /** The latest map as served files; null until an adapter reports one. */
 let mapFiles: { yaml: string; png: Buffer; version: string } | null = null;
+// A site map file (MAP_FILE=path/to/map.yaml) is shown until the adapter
+// reports a map of its own (e.g. live SLAM), which then replaces it.
+// ponytail: a later adapter map without a session id may continue the file's
+// session; give it MapGrid.session if their frames differ.
+if (process.env.MAP_FILE) {
+	const f = readMapFile(process.env.MAP_FILE);
+	mapFiles = { yaml: f.yaml, png: f.png, version: f.version };
+	const session = history.mapSeen(
+		Date.now(),
+		{ known: 0, resolution: f.resolution },
+		f.version,
+	);
+	send({ type: "map", version: f.version, session });
+	console.log(`[gateway] map file ${process.env.MAP_FILE}`);
+}
 let pendingMap: MapGrid | null = null;
 let mapTimer: ReturnType<typeof setTimeout> | null = null;
 let lastMapAt = 0;

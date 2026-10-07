@@ -77,6 +77,7 @@ VITE_GATEWAY_URL=ws://localhost:8787 pnpm --filter web dev     # 다른 터미�
 | `WS_PORT` | `8787` | WebSocket과 HTTP 포트 |
 | `HISTORY_DB` | `history.db` | 이력 SQLite 파일 |
 | `HISTORY_DAYS` | `62` | 이력 보관 기간(일). 30일 화면과 직전 30일 비교를 위해 62일 |
+| `MAP_FILE` | (없음) | 현장 지도 파일(map_server 형식 `map.yaml` + PNG). 어댑터가 지도를 보내기 전까지, 또는 보내지 않는 경우 이 지도를 보여줍니다 |
 
 ## 이력과 KPI
 

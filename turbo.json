@@ -14,7 +14,8 @@
 				"FLEET_ADAPTER",
 				"WS_PORT",
 				"HISTORY_DB",
-				"HISTORY_DAYS"
+				"HISTORY_DAYS",
+				"MAP_FILE"
 			]
 		},
 		"test": {}
