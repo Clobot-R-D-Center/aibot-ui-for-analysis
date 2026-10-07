@@ -310,6 +310,25 @@ function LayersPanel({
 					);
 				})}
 			</ul>
+			{layers.heatmap && (
+				<div className="mt-2 border-border/70 border-t px-1.5 pt-2">
+					<div className="mb-1 text-[10px] text-faint uppercase tracking-wide">
+						{m.legend_heat_scale()}
+					</div>
+					<div
+						className="h-2 rounded-sm"
+						style={{
+							background:
+								"linear-gradient(90deg, #440154, #3b528b, #21918c, #5ec962, #fde725)",
+						}}
+						aria-hidden
+					/>
+					<div className="mt-0.5 flex justify-between text-[10px] text-muted">
+						<span>{m.legend_heat_less()}</span>
+						<span>{m.legend_heat_more()}</span>
+					</div>
+				</div>
+			)}
 			<div className="mt-2 border-border/70 border-t pt-2">
 				<div className="mb-1 px-1.5 text-[10px] text-faint uppercase tracking-wide">
 					{m.legend_basemap()}

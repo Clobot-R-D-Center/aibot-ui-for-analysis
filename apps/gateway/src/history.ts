@@ -6,7 +6,9 @@ import { DatabaseSync } from "node:sqlite";
 import type { AdapterEventKind, Alarm, Mode } from "@aibot/fleet-adapter";
 
 /** Coverage grid cell, meters. Cells are world-aligned: floor(x / CELL). */
-export const CELL = 0.5;
+export const CELL = 0.1;
+/** Default robot radius for coverage: what the body sweeps, not just its center. */
+export const COVER_RADIUS = 0.35;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 // ponytail: tuning knobs for pose sampling — raise MIN_STEP if a parked
@@ -147,13 +149,60 @@ export function stateEvents(
 	return out;
 }
 
+/**
+ * Cells a robot of `radius` swept along consecutive samples: each segment
+ * between joined samples is a capsule (all cells whose center is within
+ * `radius` of it), an unjoined sample a disk. n counts passes — segments —
+ * over a cell, not samples.
+ */
+export function sweptCells(
+	samples: { x: number; y: number; joined: boolean }[],
+	cell: number,
+	radius: number,
+): [number, number, number][] {
+	const passes = new Map<string, [number, number, number]>();
+	const r2 = radius * radius;
+	let prev: { x: number; y: number } | null = null;
+	for (const s of samples) {
+		const a = s.joined && prev ? prev : s;
+		const [dx, dy] = [s.x - a.x, s.y - a.y];
+		const len2 = dx * dx + dy * dy;
+		const c0 = Math.floor((Math.min(a.x, s.x) - radius) / cell);
+		const c1 = Math.floor((Math.max(a.x, s.x) + radius) / cell);
+		const r0 = Math.floor((Math.min(a.y, s.y) - radius) / cell);
+		const r1 = Math.floor((Math.max(a.y, s.y) + radius) / cell);
+		for (let cy = r0; cy <= r1; cy++)
+			for (let cx = c0; cx <= c1; cx++) {
+				const px = (cx + 0.5) * cell;
+				const py = (cy + 0.5) * cell;
+				// distance² from the cell center to the segment a→s
+				const k = len2
+					? Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2))
+					: 0;
+				const ex = px - (a.x + k * dx);
+				const ey = py - (a.y + k * dy);
+				if (ex * ex + ey * ey > r2) continue;
+				const key = `${cx},${cy}`;
+				const hit = passes.get(key);
+				if (hit) hit[2]++;
+				else passes.set(key, [cx, cy, 1]);
+			}
+		prev = s;
+	}
+	return [...passes.values()];
+}
+
 // ---------- recorder + query ----------
 
 // biome-ignore lint/suspicious/noExplicitAny: SQLite rows, typed at each use
 type Row = any;
 
 /** `now` is when the gateway (re)started: intervals left open are closed then. */
-export function openHistory(file: string, now = Date.now()) {
+export function openHistory(
+	file: string,
+	now = Date.now(),
+	coverRadius = COVER_RADIUS,
+) {
 	const db = new DatabaseSync(file);
 	db.exec(`
 		PRAGMA journal_mode = WAL;
@@ -176,9 +225,18 @@ export function openHistory(file: string, now = Date.now()) {
 		)
 	)
 		db.exec("ALTER TABLE track ADD COLUMN session TEXT");
+	// Coverage sweeps the path between samples, so it needs the exact point.
+	if (
+		!(db.prepare("PRAGMA table_info(track)").all() as Row[]).some(
+			(c) => c.name === "x",
+		)
+	)
+		db.exec(
+			"ALTER TABLE track ADD COLUMN x REAL; ALTER TABLE track ADD COLUMN y REAL",
+		);
 	const ins = {
 		track: db.prepare(
-			"INSERT INTO track (robot, t, d, cx, cy, session) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO track (robot, t, d, cx, cy, session, x, y) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 		),
 		session: db.prepare("INSERT INTO map_session VALUES (?, ?, ?, ?)"),
 		sessionStats: db.prepare(
@@ -254,6 +312,8 @@ export function openHistory(file: string, now = Date.now()) {
 			Math.floor(x / CELL),
 			Math.floor(y / CELL),
 			session?.id ?? null,
+			x,
+			y,
 		);
 	}
 
@@ -354,8 +414,8 @@ export function openHistory(file: string, now = Date.now()) {
 		eventRows: db.prepare(
 			"SELECT t, kind, detail FROM event WHERE robot = ? AND t >= ? AND t < ?",
 		),
-		cells: db.prepare(
-			"SELECT cx, cy, COUNT(*) AS n FROM track WHERE robot = ? AND t >= ? AND t < ? AND session IS ? GROUP BY cx, cy",
+		samples: db.prepare(
+			"SELECT x, y, d FROM track WHERE robot = ? AND t >= ? AND t < ? AND session IS ? AND x IS NOT NULL ORDER BY t",
 		),
 	};
 
@@ -441,6 +501,19 @@ export function openHistory(file: string, now = Date.now()) {
 			return { a, b: Math.min(a + size, now), label: label(a) };
 		});
 
+		// ponytail: sweeps every sample of the range per request (fine for days of
+		// one robot); cache per day if 30-day queries of busy robots get slow.
+		const swept = (a: number, b: number) =>
+			sweptCells(
+				(q.samples.all(robot, a, b, session?.id ?? null) as Row[]).map((r) => ({
+					x: r.x,
+					y: r.y,
+					// d > 0: continues the previous sample (no gap, no jump)
+					joined: r.d > 0,
+				})),
+				CELL,
+				coverRadius,
+			);
 		const time = (t: number) => {
 			const d = new Date(t);
 			const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -531,19 +604,8 @@ export function openHistory(file: string, now = Date.now()) {
 			/** the mapping session cells (and so coverage) are read for */
 			session: session ? { id: session.id, since: session.t } : null,
 			cell: CELL,
-			cells: (
-				q.cells.all(robot, from, now, session?.id ?? null) as {
-					cx: number;
-					cy: number;
-					n: number;
-				}[]
-			).map((r) => [r.cx, r.cy, r.n]),
-			prevCells: (
-				q.cells.all(robot, pFrom, pTo, session?.id ?? null) as {
-					cx: number;
-					cy: number;
-				}[]
-			).map((r) => [r.cx, r.cy]),
+			cells: swept(from, now),
+			prevCells: swept(pFrom, pTo).map(([cx, cy]) => [cx, cy]),
 		};
 	}
 

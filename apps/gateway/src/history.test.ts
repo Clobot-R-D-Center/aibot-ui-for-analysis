@@ -11,6 +11,7 @@ import {
 	isNewSession,
 	msWhere,
 	openHistory,
+	sweptCells,
 } from "./history.ts";
 
 const at = (h: number, m = 0, s = 0) => new Date(2026, 9, 6, h, m, s).getTime();
@@ -88,7 +89,13 @@ test("records a morning and aggregates it", () => {
 	assert.equal(bucket("11:00")?.value, 0);
 	assert.equal(r.distance.find((p) => p.label === "10:00")?.value, 2.4);
 
-	assert.equal(r.cells.length, 602); // 601 samples + the post-gap one, all distinct
+	// swept band along y = 0: a cell between two samples is covered, one beyond
+	// the 0.35 m radius isn't (0.1 m cells)
+	const has = (cx: number, cy: number) =>
+		r.cells.some(([x, y]) => x === cx && y === cy);
+	assert.ok(has(20, 0)); // x = 2.05 m, between the samples at 0 and 4 m
+	assert.ok(has(20, -3)); // y = -0.25 m: inside the band
+	assert.ok(!has(20, 4)); // y = 0.45 m: outside
 	assert.deepEqual(
 		r.events.map((e) => [e.time, e.kind, e.detail]),
 		[
@@ -160,7 +167,13 @@ test("coverage cells are kept per mapping session", () => {
 
 	const r = h.query(robot, 1, at(12));
 	assert.equal(r.session?.id, second);
-	assert.deepEqual(r.cells, [[80, 80, 1]]); // only the new session's travel
+	// only the new session's travel: a disk around (40, 40), none near the origin
+	assert.ok(r.cells.length > 0);
+	assert.ok(
+		r.cells.every(
+			([cx, cy]) => Math.abs(cx - 400) <= 4 && Math.abs(cy - 400) <= 4,
+		),
+	);
 	assert.equal(r.kpis.find((k) => k.key === "distance")?.value, 0); // time KPIs untouched (2 m ≈ 0.0 km)
 
 	// an id from the adapter wins over guessing
@@ -189,4 +202,35 @@ test("a restart continues the session, and old databases gain the column", () =>
 	const b = openHistory(file, at(10)); // gateway restarted
 	assert.equal(b.mapSeen(at(10), { known: 120, resolution: 0.05 }), id);
 	assert.equal(b.query("robot-a", 1, at(12)).session?.id, id);
+});
+
+test("coverage sweeps the robot's width along its path, counting passes", () => {
+	const cell = 0.1;
+	const r = 0.35;
+	// one point: a disk of about π r² / cell² cells
+	const dot = sweptCells([{ x: 0.05, y: 0.05, joined: false }], cell, r);
+	assert.ok(Math.abs(dot.length - (Math.PI * r * r) / (cell * cell)) < 8);
+
+	// there and back along x: the middle of the band is passed twice
+	const path = [
+		{ x: 0, y: 0, joined: false },
+		{ x: 2, y: 0, joined: true },
+		{ x: 0, y: 0, joined: true },
+	];
+	const cells = new Map(
+		sweptCells(path, cell, r).map(([x, y, n]) => [`${x},${y}`, n]),
+	);
+	assert.equal(cells.get("10,0"), 2); // x = 1.05: covered between samples, twice
+	assert.equal(cells.get("10,4"), undefined); // y = 0.45: outside the width
+
+	// an unjoined sample (after a gap or a jump) doesn't bridge to the last one
+	const gap = sweptCells(
+		[
+			{ x: 0, y: 0, joined: false },
+			{ x: 2, y: 0, joined: false },
+		],
+		cell,
+		r,
+	);
+	assert.ok(!gap.some(([x, y]) => x === 10 && y === 0));
 });

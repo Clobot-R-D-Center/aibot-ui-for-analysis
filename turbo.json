@@ -15,7 +15,8 @@
 				"WS_PORT",
 				"HISTORY_DB",
 				"HISTORY_DAYS",
-				"MAP_FILE"
+				"MAP_FILE",
+				"COVER_RADIUS"
 			]
 		},
 		"test": {}

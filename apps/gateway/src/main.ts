@@ -53,7 +53,9 @@ export type LiveMessage =
 	| { type: "link"; robot: string; up: boolean }
 	| { type: "map"; version: string; session: string };
 
-const history = openHistory(HISTORY_DB);
+// Robot radius for coverage (m): the width of the band a robot sweeps.
+const COVER_RADIUS = Number(process.env.COVER_RADIUS ?? 0.35);
+const history = openHistory(HISTORY_DB, Date.now(), COVER_RADIUS);
 history.prune(HISTORY_DAYS, Date.now());
 setInterval(() => history.prune(HISTORY_DAYS, Date.now()), 3_600_000);
 
