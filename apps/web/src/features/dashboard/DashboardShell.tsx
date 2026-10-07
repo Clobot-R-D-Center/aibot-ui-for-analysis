@@ -38,8 +38,12 @@ function withCoverage(data: RobotData, grid: CellGrid | null): Kpi[] {
 
 export function DashboardShell() {
 	const live = useFleetLive();
+	// Only what can be shown on the map: a fleet source may also report
+	// participants that never send a pose (e.g. a central planner).
 	const robots = live
-		? live.robots.map((r) => ({ id: r.name, name: r.name }))
+		? live.robots
+				.filter((r) => r.pose)
+				.map((r) => ({ id: r.name, name: r.name }))
 		: ROBOTS;
 	const [picked, setPicked] = useState(ROBOTS[0].id);
 	// Live list arrives after first render; fall back to its first robot.
@@ -76,13 +80,7 @@ export function DashboardShell() {
 
 	return (
 		<div className="flex h-[100dvh] flex-col bg-canvas text-ink">
-			<TopBar
-				robots={robots}
-				robotId={robotId}
-				onRobot={setPicked}
-				range={range}
-				onRange={setRange}
-			/>
+			<TopBar range={range} onRange={setRange} />
 
 			<main className="min-h-0 flex-1 overflow-y-auto">
 				<div className="mx-auto flex max-w-[1600px] flex-col gap-4 p-4">
@@ -100,6 +98,8 @@ export function DashboardShell() {
 							state={map}
 							onRetry={() => setMapNonce((n) => n + 1)}
 							robotId={robotId}
+							choices={robots}
+							onSelect={setPicked}
 							live={live}
 							heat={heat}
 						/>

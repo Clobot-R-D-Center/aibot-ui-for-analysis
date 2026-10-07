@@ -21,11 +21,13 @@ export function RobotMarker({
 	theme,
 	muted = false,
 	stale = false,
+	onClick,
 }: {
 	pose: RobotPose;
 	theme: Theme;
 	muted?: boolean;
 	stale?: boolean;
+	onClick?: () => void;
 }) {
 	const fade = stale ? 0.3 : 1;
 	// biome-ignore lint/correctness/useExhaustiveDependencies: theme drives the recolor
@@ -46,7 +48,24 @@ export function RobotMarker({
 	useEffect(() => () => chevron.dispose(), [chevron]);
 
 	return (
-		<group position={[pose.x, pose.y, Z]} rotation={[0, 0, pose.theta]}>
+		// biome-ignore lint/a11y/noStaticElementInteractions: a three.js object, not DOM; the robots panel offers the same choice as buttons
+		<group
+			position={[pose.x, pose.y, Z]}
+			rotation={[0, 0, pose.theta]}
+			onClick={
+				onClick &&
+				((e) => {
+					e.stopPropagation();
+					onClick();
+				})
+			}
+			onPointerOver={() => {
+				if (onClick) document.body.style.cursor = "pointer";
+			}}
+			onPointerOut={() => {
+				document.body.style.cursor = "";
+			}}
+		>
 			{/* soft halo ring — draws attention without motion */}
 			<mesh renderOrder={10} visible={!muted && !stale}>
 				<ringGeometry args={[0.36, 0.5, 48]} />

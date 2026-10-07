@@ -103,6 +103,8 @@ interface Props {
 	layers: LayerVisibility;
 	apiRef: RefObject<ViewApi | null>;
 	onCursor: (world: { x: number; y: number } | null) => void;
+	/** clicking a robot marker selects it */
+	onSelect?: (id: string) => void;
 }
 
 export function MapScene({
@@ -113,6 +115,7 @@ export function MapScene({
 	layers,
 	apiRef,
 	onCursor,
+	onSelect,
 }: Props) {
 	// Stable across re-renders (e.g. cursor moves) so the view doesn't re-fit
 	// and snap back while the user is panning; only changes on map/size change.
@@ -194,6 +197,7 @@ export function MapScene({
 				robots.map((r) => (
 					<RobotMarker
 						key={r.id}
+						onClick={onSelect && (() => onSelect(r.id))}
 						pose={r.pose}
 						theme={theme}
 						muted={!r.selected}

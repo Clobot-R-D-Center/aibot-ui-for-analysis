@@ -26,6 +26,7 @@ import {
 	type LayerKey,
 	type LayerVisibility,
 } from "./overlays/overlay-data";
+import { type RobotChoice, RobotsPanel } from "./RobotsPanel";
 import { mapWorldRect } from "./ros-map";
 import { useTheme } from "./theme";
 import type { MapState } from "./use-ros-map";
@@ -45,13 +46,24 @@ interface Props {
 	onRetry: () => void;
 	/** selected robot; also seeds the demo overlays (and the demo pose without `live`) */
 	robotId: string;
+	/** robots to pick from (live: those with a pose; demo: the demo fleet) */
+	choices: { id: string; name: string }[];
+	onSelect: (id: string) => void;
 	/** live fleet; null/undefined → a single demo pose */
 	live?: FleetLive | null;
 	/** recorded coverage; replaces the demo heatmap */
 	heat?: HeatGrid;
 }
 
-export function MapPanel({ state, onRetry, robotId, live, heat }: Props) {
+export function MapPanel({
+	state,
+	onRetry,
+	robotId,
+	choices,
+	onSelect,
+	live,
+	heat,
+}: Props) {
 	const theme = useTheme();
 	const apiRef = useRef<ViewApi | null>(null);
 	const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
@@ -106,6 +118,26 @@ export function MapPanel({ state, onRetry, robotId, live, heat }: Props) {
 			.sort((a, b) => Number(a.selected) - Number(b.selected));
 	}, [spatial, live, robotId]);
 	const selected = robots.find((r) => r.selected) ?? null;
+	const panelRobots = useMemo<RobotChoice[]>(() => {
+		const byName = new Map(live?.robots.map((r) => [r.name, r]));
+		return choices.map(({ id, name }) => {
+			const r = byName.get(id);
+			if (!r) return { id, name };
+			const tone = r.stale
+				? "stale"
+				: r.mode === "error"
+					? "error"
+					: r.mode === "run"
+						? "run"
+						: "idle";
+			return {
+				id,
+				name,
+				tone,
+				status: r.stale ? m.readout_stale() : r.label || r.mode,
+			};
+		});
+	}, [choices, live]);
 	const detail = live?.robots.find((r) => r.name === robotId) ?? null;
 
 	return (
@@ -121,6 +153,7 @@ export function MapPanel({ state, onRetry, robotId, live, heat }: Props) {
 					<MapScene
 						map={ready}
 						robots={robots}
+						onSelect={onSelect}
 						theme={theme}
 						overlays={heat ? { ...spatial.overlays, heat } : spatial.overlays}
 						layers={layers}
@@ -132,6 +165,11 @@ export function MapPanel({ state, onRetry, robotId, live, heat }: Props) {
 
 			{ready && spatial && (
 				<>
+					<RobotsPanel
+						robots={panelRobots}
+						selected={robotId}
+						onSelect={onSelect}
+					/>
 					<LayersPanel layers={layers} onToggle={toggle} />
 					<Readout
 						cursor={cursor}

@@ -1,12 +1,9 @@
 import { MapPin, Moon, Sun } from "lucide-react";
 import { toggleTheme, useTheme } from "#/features/map/theme";
 import { m } from "#/paraglide/messages.js";
-import { RANGES, type RangeDays, type Robot } from "./demo-data";
+import { RANGES, type RangeDays } from "./demo-data";
 
 interface Props {
-	robots: Pick<Robot, "id" | "name">[];
-	robotId: string;
-	onRobot: (id: string) => void;
 	range: RangeDays;
 	onRange: (r: RangeDays) => void;
 }
@@ -14,7 +11,7 @@ interface Props {
 const rangeLabel = (r: RangeDays) =>
 	r === 1 ? m.range_today() : r === 7 ? m.range_7d() : m.range_30d();
 
-export function TopBar({ robots, robotId, onRobot, range, onRange }: Props) {
+export function TopBar({ range, onRange }: Props) {
 	const theme = useTheme();
 	return (
 		<header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-base-300 border-b bg-base-100 px-4 py-2.5">
@@ -32,19 +29,6 @@ export function TopBar({ robots, robotId, onRobot, range, onRange }: Props) {
 			</div>
 
 			<div className="flex items-center gap-2">
-				<select
-					value={robotId}
-					onChange={(e) => onRobot(e.target.value)}
-					aria-label={m.robot_label()}
-					className="select select-sm w-36"
-				>
-					{robots.map((r) => (
-						<option key={r.id} value={r.id}>
-							{r.name}
-						</option>
-					))}
-				</select>
-
 				{/* biome-ignore lint/a11y/useSemanticElements: join is daisyUI's segmented-control wrapper */}
 				<div className="join" role="group" aria-label={m.range_label()}>
 					{RANGES.map((r) => (
