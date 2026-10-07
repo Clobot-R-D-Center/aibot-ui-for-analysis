@@ -383,25 +383,28 @@ function DetailRows({ r, stale }: { r: LiveRobot; stale: boolean }) {
 	const BatteryIcon = b?.charging ? BatteryCharging : BatteryMedium;
 	return (
 		<>
-			<Row
-				icon={<BatteryIcon className="size-3.5" />}
-				label={m.readout_battery()}
-			>
-				{b && r.link !== false ? (
-					<span className={`tnum ${ink}`}>
-						{Math.round(b.charge)}%
-						{b.charging && <> · {m.readout_charging()}</>}
-						{b.eStop && (
-							<span className="font-medium text-error">
-								{" "}
-								· {m.readout_estop()}
-							</span>
-						)}
-					</span>
-				) : (
-					<span className="text-faint">{m.readout_no_link()}</span>
-				)}
-			</Row>
+			{/* Not every robot stack reports a battery; no row until one does. */}
+			{b && (
+				<Row
+					icon={<BatteryIcon className="size-3.5" />}
+					label={m.readout_battery()}
+				>
+					{r.link !== false ? (
+						<span className={`tnum ${ink}`}>
+							{Math.round(b.charge)}%
+							{b.charging && <> · {m.readout_charging()}</>}
+							{b.eStop && (
+								<span className="font-medium text-error">
+									{" "}
+									· {m.readout_estop()}
+								</span>
+							)}
+						</span>
+					) : (
+						<span className="text-faint">{m.readout_no_link()}</span>
+					)}
+				</Row>
+			)}
 			{r.link !== null && (
 				<Row icon={<Bell className="size-3.5" />} label={m.readout_alarms()}>
 					{r.alarms.length > 0 ? (
