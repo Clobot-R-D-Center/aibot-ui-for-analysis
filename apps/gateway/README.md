@@ -27,7 +27,7 @@ robots ──(any transport)──▶ @aibot/adapter-<name> ──FleetSink─�
 
 ```sh
 pnpm --filter gateway start        # simulated fleet (FLEET_ADAPTER=sim)
-VITE_GATEWAY_URL=ws://localhost:8787 pnpm --filter web dev
+pnpm --filter web dev             # connects to ws://<host>:8787
 ```
 
 | env | default | |
@@ -36,8 +36,12 @@ VITE_GATEWAY_URL=ws://localhost:8787 pnpm --filter web dev
 | `WS_PORT` | `8787` | WebSocket + HTTP |
 | `HISTORY_DB` | `history.db` | SQLite file |
 | `HISTORY_DAYS` | `62` | retention: the 30-day view plus the previous 30 days for deltas |
+| `MAP_FILE` | | a site `map.yaml` shown until the adapter reports a map |
 
-Adapters read their own settings from the environment.
+Adapters read their own settings from the environment. Settings can also go in
+a `.env` in the working directory (`apps/gateway/.env` under pnpm; git-ignored), and
+variables set in the shell take precedence.
+The file isn't run through a shell, so write paths in full: `~` is not expanded.
 
 ## Test
 

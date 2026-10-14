@@ -2,6 +2,7 @@
 // speaks a robot stack, records what it reports for GET /history, and relays
 // it live to browsers over a WebSocket on the same port, in one neutral
 // protocol (see LiveMessage) — so the UI never knows which robots it shows.
+import { existsSync } from "node:fs";
 import http from "node:http";
 import type { FleetSink, MapGrid, StartAdapter } from "@aibot/fleet-adapter";
 import { WebSocketServer } from "ws";
@@ -14,6 +15,10 @@ import {
 	readMapFile,
 	validGrid,
 } from "./map.ts";
+
+// Settings may also come from ./.env; the shell's own variables win. Read here,
+// not via node --env-file, so a packaged binary (SEA, pkg) reads it too.
+if (existsSync(".env")) process.loadEnvFile();
 
 const PORT = Number(process.env.WS_PORT ?? 8787);
 const HISTORY_DB = process.env.HISTORY_DB ?? "history.db";
