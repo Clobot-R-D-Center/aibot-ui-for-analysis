@@ -210,6 +210,31 @@ const TOGGLES: Array<{
 		),
 	},
 	{
+		key: "graph",
+		label: () => m.legend_graph(),
+		swatch: (
+			<span
+				className="size-2 rounded-full"
+				style={{ background: "var(--muted)" }}
+				aria-hidden
+			/>
+		),
+	},
+	{
+		key: "zones",
+		label: () => m.legend_zones(),
+		swatch: (
+			<span
+				className="size-3 rounded-sm border"
+				style={{
+					borderColor: "var(--data-5)",
+					background: "color-mix(in oklch, var(--data-5) 20%, transparent)",
+				}}
+				aria-hidden
+			/>
+		),
+	},
+	{
 		key: "heatmap",
 		label: () => m.legend_heatmap(),
 		swatch: (
@@ -223,6 +248,13 @@ const TOGGLES: Array<{
 			/>
 		),
 	},
+];
+
+/** Matches zoneColor in overlays/SiteLayers.tsx. */
+const ZONE_KINDS: Array<[string, () => string]> = [
+	["var(--data-6)", () => m.legend_zone_blocked()],
+	["var(--data-4)", () => m.legend_zone_slow()],
+	["var(--data-5)", () => m.legend_zone_other()],
 ];
 
 function LayersPanel({
@@ -264,6 +296,23 @@ function LayersPanel({
 					);
 				})}
 			</ul>
+			{layers.zones && (
+				<ul className="mt-2 flex flex-col gap-1 border-border/70 border-t px-1.5 pt-2 text-muted text-xs">
+					{ZONE_KINDS.map(([color, label]) => (
+						<li key={color} className="flex items-center gap-2">
+							<span
+								className="size-2.5 rounded-sm border"
+								style={{
+									borderColor: color,
+									background: `color-mix(in oklch, ${color} 20%, transparent)`,
+								}}
+								aria-hidden
+							/>
+							{label()}
+						</li>
+					))}
+				</ul>
+			)}
 			{layers.heatmap && (
 				<div className="mt-2 border-border/70 border-t px-1.5 pt-2">
 					<div className="mb-1 text-[10px] text-faint uppercase tracking-wide">

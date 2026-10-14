@@ -2,13 +2,14 @@
 // speaks a robot stack, records what it reports for GET /history, and relays
 // it live to browsers over a WebSocket on the same port, in one neutral
 // protocol (see LiveMessage) — so the UI never knows which robots it shows.
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
-import type { FleetSink, StartAdapter } from "@aibot/fleet-adapter";
+import type { FleetSink, LoadSite, StartAdapter } from "@aibot/fleet-adapter";
 import { WebSocketServer } from "ws";
 import { type Days, openHistory } from "./history.ts";
-import { readMapFile } from "./map.ts";
+import { readMapFile, readSiteFile } from "./map.ts";
 
 // Settings may also come from ./.env; the shell's own variables win. Read here,
 // not via node --env-file, so a packaged binary (SEA, pkg) reads it too.
@@ -54,6 +55,19 @@ const server = http.createServer((req, res) => {
 	// The dashboard is served from another origin on the LAN.
 	res.setHeader("Access-Control-Allow-Origin", "*");
 	const url = new URL(req.url ?? "/", "http://gateway");
+	if (url.pathname === "/map/site.json") {
+		if (!site) {
+			res.writeHead(404).end("no map meta");
+			return;
+		}
+		res
+			.writeHead(200, {
+				"Content-Type": "application/json",
+				"Cache-Control": "no-store",
+			})
+			.end(site);
+		return;
+	}
 	if (url.pathname === "/map/map.yaml" || url.pathname === "/map/map.png") {
 		if (!mapFiles) {
 			res.writeHead(404).end("no map (MAP_FILE)");
@@ -123,15 +137,38 @@ function safely(what: string, f: () => void) {
 	}
 }
 
+if (!/^[a-z0-9-]+$/.test(ADAPTER))
+	throw new Error(`bad FLEET_ADAPTER: ${ADAPTER}`);
+// An adapter is a workspace package this app depends on (see package.json).
+const pkg = `@aibot/adapter-${ADAPTER}`;
+const { default: start, loadSite } = (await import(pkg).catch((e) => {
+	throw new Error(
+		`${pkg} isn't available — add it to apps/gateway/package.json ("${pkg}": "workspace:*") and run pnpm install (${e.message})`,
+	);
+})) as { default: StartAdapter; loadSite?: LoadSite };
+
 /** The map file as served; null without one. */
 let mapFiles: { yaml: string; png: Buffer } | null = null;
+/** Its meta (graph, zones) as neutral JSON; null without any. */
+let site: string | null = null;
 if (MAP_FILE) {
 	const f = readMapFile(MAP_FILE);
 	mapFiles = { yaml: f.yaml, png: f.png };
-	// Coverage follows the map: another map file starts another session.
+	// The meta only adds to the map: a broken one is logged, not fatal.
+	try {
+		const s = loadSite?.(MAP_FILE) ?? readSiteFile(MAP_FILE);
+		if (s) site = JSON.stringify(s);
+	} catch (e) {
+		console.warn(`[gateway] map meta: ${(e as Error).message}`);
+	}
+	// Coverage follows the map: another map file starts another session. The
+	// meta can change without moving the frame, so it only changes the version.
 	const session = history.mapSeen(Date.now(), f.version);
-	send({ type: "map", version: f.version, session });
-	console.log(`[gateway] map file ${MAP_FILE}`);
+	const version = site
+		? `${f.version}.${createHash("sha1").update(site).digest("hex").slice(0, 8)}`
+		: f.version;
+	send({ type: "map", version, session });
+	console.log(`[gateway] map file ${MAP_FILE}${site ? " + meta" : ""}`);
 }
 
 const sink: FleetSink = {
@@ -169,15 +206,6 @@ const sink: FleetSink = {
 	},
 };
 
-if (!/^[a-z0-9-]+$/.test(ADAPTER))
-	throw new Error(`bad FLEET_ADAPTER: ${ADAPTER}`);
-// An adapter is a workspace package this app depends on (see package.json).
-const pkg = `@aibot/adapter-${ADAPTER}`;
-const { default: start } = (await import(pkg).catch((e) => {
-	throw new Error(
-		`${pkg} isn't available — add it to apps/gateway/package.json ("${pkg}": "workspace:*") and run pnpm install (${e.message})`,
-	);
-})) as { default: StartAdapter };
 const adapter = await start(sink, process.env);
 server.listen(PORT, () =>
 	console.log(

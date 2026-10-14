@@ -2,7 +2,8 @@
 // cycling through runs, idles, waits and errors, and one robot that drops
 // offline now and then — enough to exercise every panel without real robots.
 // It's also the reference adapter. The world is the map file ../map/map.yaml
-// (the gateway serves it); the routes keep clear of its walls.
+// (the gateway serves it, with the graph and zones in site.json); the routes
+// keep clear of its walls and follow that graph, and waits name its nodes.
 import type { FleetSink, Mode, StartAdapter } from "@aibot/fleet-adapter";
 
 type XY = [number, number];

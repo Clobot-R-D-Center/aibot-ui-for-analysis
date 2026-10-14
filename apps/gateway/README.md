@@ -7,7 +7,8 @@ serves it on one port:
 - `ws://…:8787` streams live fleet state (poses, plans, mode).
   A browser that joins late gets the latest of each message first.
 - `GET /history?robot=<name>&days=1|7|30` returns KPIs, trends, events and coverage cells.
-- `GET /map/map.yaml`, `/map/map.png` serve the site map from `MAP_FILE`.
+- `GET /map/map.yaml`, `/map/map.png` serve the site map from `MAP_FILE`, and
+  `/map/site.json` its graph and zones (see `Site` in `@aibot/fleet-adapter`).
 
 The browser only ever sees this neutral protocol (`LiveMessage` in
 `src/main.ts`), so supporting another robot stack means writing one adapter. The
@@ -36,7 +37,7 @@ pnpm --filter web dev             # connects to ws://<host>:8787
 | `WS_PORT` | `8787` | WebSocket + HTTP |
 | `HISTORY_DB` | `history.db` | SQLite file |
 | `HISTORY_DAYS` | `62` | retention: the 30-day view plus the previous 30 days for deltas |
-| `MAP_FILE` | the sim's world with `sim` | the site `map.yaml` (map_server, PNG image) |
+| `MAP_FILE` | the sim's world with `sim` | the site `map.yaml` (map_server, PNG image); its meta comes from the adapter's `loadSite` or a `site.json` beside it |
 
 Adapters read their own settings from the environment. Settings can also go in
 a `.env` in the working directory (`apps/gateway/.env` under pnpm; git-ignored), and

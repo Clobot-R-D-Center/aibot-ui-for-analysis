@@ -16,6 +16,33 @@ export interface Pose {
 	theta: number;
 }
 
+/**
+ * A site's map meta (graph and zones) in the neutral form the gateway serves
+ * as /map/site.json. Map frame, meters.
+ */
+export interface Site {
+	/** Places on the graph; `id` matches what `wait()` reports. */
+	nodes: { id: string; name: string; kind: string; x: number; y: number }[];
+	/** Drivable connections, drawn along `points` (in the drive direction if one-way). */
+	links: { id: string; oneWay: boolean; points: [number, number][] }[];
+	/** Areas; `kind` "blocked" and "slow" are drawn apart from the rest. */
+	zones: {
+		id: string;
+		name: string;
+		kind: string;
+		/** a polygon; false = a polyline */
+		closed: boolean;
+		points: [number, number][];
+	}[];
+}
+
+/**
+ * An adapter package may also export `loadSite`, reading its stack's own map
+ * meta format for the map at `mapYaml` (null = none there). Without it the
+ * gateway reads a neutral site.json next to the map.yaml.
+ */
+export type LoadSite = (mapYaml: string) => Site | null;
+
 /** What an adapter calls; the core dedupes, records and relays. */
 export interface FleetSink {
 	/** Connectivity and mode. Call on change or periodically; repeats are cheap. */

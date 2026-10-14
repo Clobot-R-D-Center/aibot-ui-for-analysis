@@ -12,6 +12,7 @@ import { OccupancyLayer } from "./OccupancyLayer";
 import { HeatmapLayer } from "./overlays/HeatmapLayer";
 import type { HeatGrid, LayerVisibility, XY } from "./overlays/overlay-data";
 import { PathLayer } from "./overlays/PathLayer";
+import { GraphLayer, ZonesLayer } from "./overlays/SiteLayers";
 import { RobotMarker } from "./RobotMarker";
 import { mapWorldRect, type RobotPose } from "./ros-map";
 import type { Theme } from "./theme";
@@ -178,6 +179,8 @@ export function MapScene({
 					heightPx={map.heightPx}
 				/>
 			)}
+			{layers.zones && <ZonesLayer site={map.site} theme={theme} />}
+			{layers.graph && <GraphLayer site={map.site} theme={theme} />}
 			{layers.path &&
 				robots.map(
 					(r) =>

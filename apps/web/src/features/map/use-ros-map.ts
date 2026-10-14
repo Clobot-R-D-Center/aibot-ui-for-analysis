@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { parseMapYaml, type RosMapMeta } from "./ros-map";
+import { NO_SITE, parseSite, type Site } from "./site";
 
 export interface LoadedMap {
 	meta: RosMapMeta;
 	image: HTMLImageElement;
 	widthPx: number;
 	heightPx: number;
+	/** graph and zones; empty when the map has none */
+	site: Site;
 }
 
 export type MapState =
@@ -33,7 +36,8 @@ function loadImage(
 }
 
 /**
- * Loads a ROS map from a directory holding `map.yaml` + its image.
+ * Loads a ROS map from a directory holding `map.yaml` + its image, and its
+ * meta from `site.json` there (optional: missing or broken = none).
  * `nonce` forces a reload (retry, or a new map version). `baseUrl` null = no
  * map yet (stays loading). A reload keeps showing the current map until the
  * new one is in — and keeps it if the reload fails — so a replaced map
@@ -60,7 +64,12 @@ export function useRosMap(
 				const res = await fetch(`${base}/map.yaml`, { signal: ctrl.signal });
 				if (!res.ok) throw new Error(`map.yaml: HTTP ${res.status}`);
 				const meta = parseMapYaml(await res.text());
-				const image = await loadImage(`${base}/${meta.image}`, ctrl.signal);
+				const [image, site] = await Promise.all([
+					loadImage(`${base}/${meta.image}`, ctrl.signal),
+					fetch(`${base}/site.json`, { signal: ctrl.signal })
+						.then((r) => (r.ok ? r.json() : null))
+						.then(parseSite, () => NO_SITE),
+				]);
 				if (ctrl.signal.aborted) return;
 				setState({
 					status: "ready",
@@ -69,6 +78,7 @@ export function useRosMap(
 						image,
 						widthPx: image.naturalWidth,
 						heightPx: image.naturalHeight,
+						site,
 					},
 				});
 			} catch (err) {

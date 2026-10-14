@@ -9,11 +9,13 @@ export interface HeatGrid {
 	data: Float32Array;
 }
 
-export type LayerKey = "robot" | "path" | "heatmap";
+export type LayerKey = "robot" | "path" | "graph" | "zones" | "heatmap";
 export type LayerVisibility = Record<LayerKey, boolean>;
 
 export const DEFAULT_LAYERS: LayerVisibility = {
 	robot: true,
 	path: true,
+	graph: true,
+	zones: true,
 	heatmap: false,
 };

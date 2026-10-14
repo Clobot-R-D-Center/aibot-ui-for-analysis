@@ -31,6 +31,10 @@ and run the gateway with `FLEET_ADAPTER=<name>`.
 - Report `state` periodically or on change, since repeats are deduped. Report `poses`
   at your natural rate (~10 Hz is plenty).
 - The map is not an adapter's job: the gateway reads it from a file (`MAP_FILE`).
+  Its graph and zones come from a neutral `site.json` beside the map.yaml
+  (the `Site` type), or, if your stack keeps them in its own format, export a
+  `loadSite: LoadSite` from your package to read that instead. Node ids should
+  match what you report to `wait()`.
 - Call `lost()` when your source disconnects. Robot states are unknown from then
   on, so that time isn't counted as uptime.
 - An adapter may pull per-robot detail from a second source (e.g. each robot's
