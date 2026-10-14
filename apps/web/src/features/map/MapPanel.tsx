@@ -80,6 +80,7 @@ export function MapPanel({
 									selected: r.name === robotId,
 									stale: r.stale,
 									plan: r.plan,
+									place: r.place,
 								},
 							]
 						: [],

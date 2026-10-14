@@ -28,7 +28,21 @@ describe("applyMessage", () => {
 			],
 		});
 
+		f = applyMessage(f, {
+			type: "place",
+			robot: "robot-a",
+			node: null,
+			link: "L1",
+		});
+		f = applyMessage(f, {
+			type: "place",
+			robot: "robot-b",
+			node: "",
+			link: "",
+		});
+
 		expect(f["robot-a"]).toMatchObject({
+			place: { link: "L1" },
 			pose: { x: 1.5, y: -2.25 },
 			seenAt: 1,
 			online: true,
@@ -39,6 +53,7 @@ describe("applyMessage", () => {
 				[2.5, 0],
 			],
 		});
+		expect(f["robot-b"].place).toBeNull(); // neither id: unknown
 	});
 
 	it("never throws on malformed messages, keeping good entries", () => {
@@ -50,6 +65,7 @@ describe("applyMessage", () => {
 			{ type: "poses", poses: [{ robot: "r", x: 1 }] },
 			{ type: "state", robot: "r" },
 			{ type: "plan", robot: "r", points: [[1, "x"]] },
+			{ type: "place", node: "N1" }, // no robot
 		];
 		for (const m of junk) expect(applyMessage({}, m)).toEqual({});
 

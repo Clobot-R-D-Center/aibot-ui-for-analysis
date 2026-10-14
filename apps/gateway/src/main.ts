@@ -50,6 +50,7 @@ export type LiveMessage =
 			poses: { robot: string; x: number; y: number; theta: number }[];
 	  }
 	| { type: "plan"; robot: string; points: [number, number][] }
+	| { type: "place"; robot: string; node: string | null; link: string | null }
 	| { type: "map"; version: string; session: string };
 
 // Robot radius for coverage (m): the width of the band a robot sweeps.
@@ -196,6 +197,14 @@ const sink: FleetSink = {
 	},
 	plan(robot, points) {
 		send({ type: "plan", robot, points });
+	},
+	place(robot, at) {
+		send({
+			type: "place",
+			robot,
+			node: at && "node" in at ? at.node : null,
+			link: at && "link" in at ? at.link : null,
+		});
 	},
 	wait(robot, at) {
 		safely("wait", () => history.wait(robot, Date.now(), at));

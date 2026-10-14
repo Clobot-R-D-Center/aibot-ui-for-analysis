@@ -93,6 +93,8 @@ export interface MapRobot {
 	stale: boolean;
 	/** planned path; hidden while stale (an old plan would read as current) */
 	plan: XY[];
+	/** the graph node or link it is on; highlighted unless stale */
+	place: { node: string } | { link: string } | null;
 }
 
 interface Props {
@@ -180,7 +182,9 @@ export function MapScene({
 				/>
 			)}
 			{layers.zones && <ZonesLayer site={map.site} theme={theme} />}
-			{layers.graph && <GraphLayer site={map.site} theme={theme} />}
+			{layers.graph && (
+				<GraphLayer site={map.site} theme={theme} robots={robots} />
+			)}
 			{layers.path &&
 				robots.map(
 					(r) =>

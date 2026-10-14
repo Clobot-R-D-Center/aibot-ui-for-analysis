@@ -1,6 +1,7 @@
 import { Line } from "@react-three/drei";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import type { MapRobot } from "../MapScene";
 import type { Site, SiteZone } from "../site";
 import type { Theme } from "../theme";
 import { threeColor } from "../three-color";
@@ -76,10 +77,31 @@ export function ZonesLayer({ site, theme }: { site: Site; theme: Theme }) {
 	return site.zones.map((z) => <Zone key={z.id} zone={z} theme={theme} />);
 }
 
-/** Links as thin quiet lines, nodes as dots: the reference the robots move on. */
-export function GraphLayer({ site, theme }: { site: Site; theme: Theme }) {
+/**
+ * Links as thin quiet lines, nodes as dots: the reference the robots move on.
+ * The node or link a (current) robot is on is drawn in the robot color, and
+ * after the rest: coincident links (A→B and B→A) must not cover it.
+ */
+export function GraphLayer({
+	site,
+	theme,
+	robots,
+}: {
+	site: Site;
+	theme: Theme;
+	robots: MapRobot[];
+}) {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: theme drives the recolor
 	const color = useMemo(() => threeColor("var(--muted)"), [theme]);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: theme drives the recolor
+	const robotColor = useMemo(() => threeColor("var(--robot)"), [theme]);
+	const on = new Set(
+		robots.flatMap((r) =>
+			r.place && !r.stale
+				? ["node" in r.place ? r.place.node : r.place.link]
+				: [],
+		),
+	);
 	const dot = useMemo(() => new THREE.CircleGeometry(NODE_R, 16), []);
 	useEffect(() => () => dot.dispose(), [dot]);
 	// ponytail: one Line and one mesh per item; merge into one geometry each if
@@ -92,13 +114,13 @@ export function GraphLayer({ site, theme }: { site: Site; theme: Theme }) {
 					points={l.points.map(
 						([x, y]) => [x, y, GRAPH_Z] as [number, number, number],
 					)}
-					color={color}
-					lineWidth={1}
+					color={on.has(l.id) ? robotColor : color}
+					lineWidth={on.has(l.id) ? 3 : 1}
 					transparent
-					opacity={0.7}
+					opacity={on.has(l.id) ? 0.9 : 0.7}
 					depthTest={false}
 					depthWrite={false}
-					renderOrder={3}
+					renderOrder={on.has(l.id) ? 3.5 : 3}
 				/>
 			))}
 			{site.nodes.map((n) => (
@@ -106,10 +128,11 @@ export function GraphLayer({ site, theme }: { site: Site; theme: Theme }) {
 					key={n.id}
 					geometry={dot}
 					position={[n.x, n.y, GRAPH_Z]}
-					renderOrder={3}
+					scale={on.has(n.id) ? 1.8 : 1}
+					renderOrder={on.has(n.id) ? 3.5 : 3}
 				>
 					<meshBasicMaterial
-						color={color}
+						color={on.has(n.id) ? robotColor : color}
 						transparent
 						depthTest={false}
 						depthWrite={false}

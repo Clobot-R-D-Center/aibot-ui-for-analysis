@@ -43,6 +43,9 @@ export interface Site {
  */
 export type LoadSite = (mapDir: string) => Site | null;
 
+/** Where on the site's graph a robot is: ids from Site's nodes and links. */
+export type Place = { node: string } | { link: string };
+
 /** What an adapter calls; the core dedupes, records and relays. */
 export interface FleetSink {
 	/** Connectivity and mode. Call on change or periodically; repeats are cheap. */
@@ -51,6 +54,8 @@ export interface FleetSink {
 	poses(poses: { robot: string; pose: Pose }[]): void;
 	/** Planned path ahead (map frame); [] clears it. */
 	plan(robot: string, points: [number, number][]): void;
+	/** The node or link the robot is on; null = unknown. Call on change or periodically. */
+	place(robot: string, at: Place | null): void;
 	/** Where the robot is waiting for others (e.g. a graph node id); null = not waiting. */
 	wait(robot: string, at: string | null): void;
 	/** The fleet source itself is gone: every robot's state is unknown from now. */

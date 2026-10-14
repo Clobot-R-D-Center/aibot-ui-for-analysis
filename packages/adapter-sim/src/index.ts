@@ -3,29 +3,51 @@
 // offline now and then — enough to exercise every panel without real robots.
 // It's also the reference adapter. The world is the map folder ../map (the
 // gateway serves its map.yaml, and the graph and zones in site.json); the routes
-// keep clear of its walls and follow that graph, and waits name its nodes.
-import type { FleetSink, Mode, StartAdapter } from "@aibot/fleet-adapter";
+// keep clear of its walls and follow that graph: each robot reports the node
+// or link it is on, and waits at the next node ahead.
+import type {
+	FleetSink,
+	Mode,
+	Place,
+	StartAdapter,
+} from "@aibot/fleet-adapter";
 
 type XY = [number, number];
 interface Route {
 	length: number;
 	at(s: number): XY;
+	/** the graph nodes on the route (numbers of site.json's N…), by distance along it */
+	stops: { s: number; n: number }[];
 }
 
-const circle = (cx: number, cy: number, r: number): Route => ({
+/** A circle walked counter-clockwise, its nodes at 0°, 90°, 180°, 270°. */
+export const circle = (
+	cx: number,
+	cy: number,
+	r: number,
+	nodes: number[],
+): Route => ({
 	length: 2 * Math.PI * r,
 	at: (s) => [cx + r * Math.cos(s / r), cy + r * Math.sin(s / r)],
+	stops: nodes.map((n, i) => ({ s: (r * i * Math.PI) / 2, n })),
 });
 
-/** Closed polyline through `pts`, walked at constant speed. */
-function loop(pts: XY[]): Route {
+/** Closed polyline through `pts` (node numbers `nodes`), walked at constant speed. */
+export function loop(pts: XY[], nodes: number[]): Route {
 	const segs = pts.map((a, i) => {
 		const b = pts[(i + 1) % pts.length];
 		return { a, b, len: Math.hypot(b[0] - a[0], b[1] - a[1]) };
 	});
 	const length = segs.reduce((s, g) => s + g.len, 0);
+	let s0 = 0;
+	const stops = segs.map((g, i) => {
+		const stop = { s: s0, n: nodes[i] };
+		s0 += g.len;
+		return stop;
+	});
 	return {
 		length,
+		stops,
 		at(s) {
 			let d = ((s % length) + length) % length;
 			for (const g of segs) {
@@ -41,6 +63,26 @@ function loop(pts: XY[]): Route {
 			return pts[0];
 		},
 	};
+}
+
+const NODE_M = 0.3; // this close to a node is "at" it, as a fleet manager would say
+
+/** The node the robot is at, else the link it is on, as site.json names them. */
+export function placeOf(route: Route, s: number): Place {
+	const d = ((s % route.length) + route.length) % route.length;
+	const { stops } = route;
+	for (const p of stops) {
+		const gap = Math.abs(d - p.s);
+		if (Math.min(gap, route.length - gap) < NODE_M) return { node: `N${p.n}` };
+	}
+	const i = stops.findLastIndex((p) => p.s <= d);
+	return { link: `L${stops[i].n}-${stops[(i + 1) % stops.length].n}` };
+}
+
+/** The next node ahead of the robot. */
+export function nextNode(route: Route, s: number): string {
+	const d = ((s % route.length) + route.length) % route.length;
+	return `N${(route.stops.find((p) => p.s > d + NODE_M) ?? route.stops[0]).n}`;
 }
 
 const TICK = 100; // ms
@@ -76,24 +118,30 @@ const start: StartAdapter = (sink: FleetSink) => {
 		nextDrop: flaky ? now + flaky[0] : Infinity,
 	});
 	const bots = [
-		bot("sim-1", circle(-18, 3, 3)),
+		bot("sim-1", circle(-18, 3, 3, [9, 10, 11, 12])),
 		bot(
 			"sim-2",
-			loop([
-				[-8, 6],
-				[-2, 6],
-				[-2, 7],
-				[-8, 7],
-			]),
+			loop(
+				[
+					[-8, 6],
+					[-2, 6],
+					[-2, 7],
+					[-8, 7],
+				],
+				[1, 2, 3, 4],
+			),
 		),
 		bot(
 			"sim-3",
-			loop([
-				[-10, 9],
-				[-4, 9],
-				[-4, 12],
-				[-10, 12],
-			]),
+			loop(
+				[
+					[-10, 9],
+					[-4, 9],
+					[-4, 12],
+					[-10, 12],
+				],
+				[5, 6, 7, 8],
+			),
 			[240_000, 20_000],
 		),
 	];
@@ -150,7 +198,7 @@ const start: StartAdapter = (sink: FleetSink) => {
 					if (chance(1 / 60)) {
 						b.holdUntil = t + 3_000; // an obstacle
 					} else if (chance(1 / 90)) {
-						b.waitingAt = `N${1 + Math.floor(Math.random() * 12)}`;
+						b.waitingAt = nextNode(b.route, b.s);
 						b.holdUntil = t + 6_000;
 						sink.wait(b.name, b.waitingAt);
 					} else {
@@ -169,12 +217,14 @@ const start: StartAdapter = (sink: FleetSink) => {
 		);
 		if (ticks % 5 === 0) for (const b of online) sink.plan(b.name, plan(b));
 		if (ticks % 10 === 0)
-			for (const b of bots)
+			for (const b of bots) {
 				sink.state(b.name, {
 					online: b.online,
 					mode: b.mode,
 					label: b.mode.toUpperCase(),
 				});
+				if (b.online) sink.place(b.name, placeOf(b.route, b.s));
+			}
 	}, TICK);
 
 	return { stop: () => clearInterval(timer) };

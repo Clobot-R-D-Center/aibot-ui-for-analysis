@@ -17,6 +17,8 @@ export interface LiveRobot {
 	mode: string;
 	/** the robot stack's own name for its state */
 	label: string;
+	/** the site graph node or link it is on (ids from /map/site.json); null = unknown */
+	place: { node: string } | { link: string } | null;
 }
 
 export type Fleet = Record<string, LiveRobot>;
@@ -29,6 +31,7 @@ const blank = (name: string): LiveRobot => ({
 	online: true,
 	mode: "other",
 	label: "",
+	place: null,
 });
 
 // Off the wire, so nothing is trusted: every field read below is checked, and a
@@ -82,6 +85,16 @@ export function applyMessage(fleet: Fleet, msg: unknown, now = 0): Fleet {
 			);
 			if (!ok) return fleet;
 			patch(robot, { plan: m.points.map((p: number[]) => [p[0], p[1]]) });
+			return next;
+		}
+		case "place": {
+			if (!robot) return fleet;
+			const node = str(m.node);
+			const link = str(m.link);
+			let place: LiveRobot["place"] = null;
+			if (node) place = { node };
+			else if (link) place = { link };
+			patch(robot, { place });
 			return next;
 		}
 		default:
