@@ -34,7 +34,7 @@ pnpm dev
 웹(`http://localhost:3000`)과 gateway(시뮬레이터)가 함께 뜹니다. 로봇 없이 전체 흐름(실시간 위치, 계획 경로, 이력 KPI, 지도)을 확인할 수 있습니다.
 
 - 가상 로봇 3대가 운행·대기, 장애물 정지, 에러를 흉내 냅니다. 한 대는 주기적으로 오프라인이 됩니다.
-- 지도는 시뮬레이터 월드의 지도 파일(`packages/adapter-sim/map/map.yaml`)입니다. `MAP_FILE`을 주지 않으면 이 파일을 씁니다. 옆의 `site.json`에 주행 그래프(노드·링크)와 영역이 있습니다.
+- 지도는 시뮬레이터 월드의 지도 폴더(`packages/adapter-sim/map`)입니다. `MAP_DIR`을 주지 않으면 이 폴더를 씁니다. 그 안의 `site.json`에 주행 그래프(노드·링크)와 영역이 있습니다.
 
 웹은 기본으로 자신이 열린 호스트의 8787 포트(`ws://<호스트>:8787`)에서 gateway를 찾습니다. gateway가 다른 PC에 있으면 `VITE_GATEWAY_URL`로 지정합니다.
 
@@ -67,7 +67,7 @@ pnpm dev
 | `WS_PORT` | `8787` | WebSocket과 HTTP 포트 |
 | `HISTORY_DB` | `history.db` | 이력 SQLite 파일 |
 | `HISTORY_DAYS` | `62` | 이력 보관 기간(일). 30일 화면과 직전 30일 비교를 위해 62일 |
-| `MAP_FILE` | (없음) | 현장 지도 파일(map_server 형식 `map.yaml` + PNG). 지도는 이 파일에서만 옵니다. 노드·링크·영역은 어댑터의 로더(`loadSite`)나 같은 폴더의 `site.json`에서 읽습니다. 시뮬레이터는 기본으로 자기 월드 지도를 씁니다 |
+| `MAP_DIR` | (없음) | 현장 지도 폴더. 그 안의 `map.yaml`(map_server 형식, PNG 이미지)을 지도로 씁니다. 지도는 이 폴더에서만 옵니다. 노드·링크·영역은 어댑터의 로더(`loadSite`)나 폴더 안의 `site.json`에서 읽습니다. 시뮬레이터는 기본으로 자기 월드 지도를 씁니다 |
 | `COVER_RADIUS` | `0.35` | 커버리지 계산에 쓰는 로봇 반경(m). 로봇이 지나가며 쓸고 간 폭의 절반입니다 |
 
 ## 이력과 KPI

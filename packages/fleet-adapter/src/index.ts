@@ -38,10 +38,10 @@ export interface Site {
 
 /**
  * An adapter package may also export `loadSite`, reading its stack's own map
- * meta format for the map at `mapYaml` (null = none there). Without it the
- * gateway reads a neutral site.json next to the map.yaml.
+ * meta format from the map folder (MAP_DIR; null = none there). Without it
+ * the gateway reads a neutral site.json in that folder.
  */
-export type LoadSite = (mapYaml: string) => Site | null;
+export type LoadSite = (mapDir: string) => Site | null;
 
 /** What an adapter calls; the core dedupes, records and relays. */
 export interface FleetSink {

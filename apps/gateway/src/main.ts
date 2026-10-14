@@ -5,11 +5,12 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import http from "node:http";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FleetSink, LoadSite, StartAdapter } from "@aibot/fleet-adapter";
 import { WebSocketServer } from "ws";
 import { type Days, openHistory } from "./history.ts";
-import { readMapFile, readSiteFile } from "./map.ts";
+import { readMap, readSite } from "./map.ts";
 
 // Settings may also come from ./.env; the shell's own variables win. Read here,
 // not via node --env-file, so a packaged binary (SEA, pkg) reads it too.
@@ -20,14 +21,20 @@ const HISTORY_DB = process.env.HISTORY_DB ?? "history.db";
 // 30-day view + the previous 30 days its deltas compare against.
 const HISTORY_DAYS = Number(process.env.HISTORY_DAYS ?? 62);
 const ADAPTER = process.env.FLEET_ADAPTER ?? "sim";
-// The site map (map_server map.yaml + PNG). The simulator's world is a map file
-// of its own, so the sim runs with no settings.
+// The site map: a folder with a map_server map.yaml + PNG and its meta. The
+// simulator's world is such a folder of its own, so the sim runs with no settings.
 // ponytail: a sim-only default in the core; goes once maps load per format
-const MAP_FILE =
-	process.env.MAP_FILE ??
+const MAP_DIR =
+	process.env.MAP_DIR ??
 	(ADAPTER === "sim"
-		? fileURLToPath(import.meta.resolve("@aibot/adapter-sim/map/map.yaml"))
+		? dirname(
+				fileURLToPath(import.meta.resolve("@aibot/adapter-sim/map/map.yaml")),
+			)
 		: undefined);
+if (process.env.MAP_FILE)
+	console.warn(
+		"[gateway] MAP_FILE is no longer read: set MAP_DIR to the folder holding map.yaml",
+	);
 
 /** What browsers receive (apps/web/src/features/live/fleet.ts reads it). */
 export type LiveMessage =
@@ -70,7 +77,7 @@ const server = http.createServer((req, res) => {
 	}
 	if (url.pathname === "/map/map.yaml" || url.pathname === "/map/map.png") {
 		if (!mapFiles) {
-			res.writeHead(404).end("no map (MAP_FILE)");
+			res.writeHead(404).end("no map (MAP_DIR)");
 			return;
 		}
 		const png = url.pathname.endsWith(".png");
@@ -147,16 +154,16 @@ const { default: start, loadSite } = (await import(pkg).catch((e) => {
 	);
 })) as { default: StartAdapter; loadSite?: LoadSite };
 
-/** The map file as served; null without one. */
+/** The map as served; null without one. */
 let mapFiles: { yaml: string; png: Buffer } | null = null;
 /** Its meta (graph, zones) as neutral JSON; null without any. */
 let site: string | null = null;
-if (MAP_FILE) {
-	const f = readMapFile(MAP_FILE);
+if (MAP_DIR) {
+	const f = readMap(MAP_DIR);
 	mapFiles = { yaml: f.yaml, png: f.png };
 	// The meta only adds to the map: a broken one is logged, not fatal.
 	try {
-		const s = loadSite?.(MAP_FILE) ?? readSiteFile(MAP_FILE);
+		const s = loadSite?.(MAP_DIR) ?? readSite(MAP_DIR);
 		if (s) site = JSON.stringify(s);
 	} catch (e) {
 		console.warn(`[gateway] map meta: ${(e as Error).message}`);
@@ -168,7 +175,7 @@ if (MAP_FILE) {
 		? `${f.version}.${createHash("sha1").update(site).digest("hex").slice(0, 8)}`
 		: f.version;
 	send({ type: "map", version, session });
-	console.log(`[gateway] map file ${MAP_FILE}${site ? " + meta" : ""}`);
+	console.log(`[gateway] map ${MAP_DIR}${site ? " + meta" : ""}`);
 }
 
 const sink: FleetSink = {
