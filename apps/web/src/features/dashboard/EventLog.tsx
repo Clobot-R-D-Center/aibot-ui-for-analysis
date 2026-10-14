@@ -1,16 +1,10 @@
 import {
-	Bell,
 	CheckCircle2,
 	CircleDot,
-	CircleX,
-	Clock,
 	Hourglass,
-	MapPinned,
-	OctagonAlert,
 	Pause,
 	Play,
 	Repeat,
-	RotateCcw,
 	TriangleAlert,
 	Wifi,
 	WifiOff,
@@ -52,38 +46,6 @@ const META: Record<
 		icon: Hourglass,
 		color: "var(--data-2)",
 		label: () => m.event_wait(),
-	},
-	task_ok: {
-		icon: CheckCircle2,
-		color: "var(--data-3)",
-		label: () => m.event_task_ok(),
-	},
-	task_fail: {
-		icon: CircleX,
-		color: "var(--data-4)",
-		label: () => m.event_task_fail(),
-	},
-	alarm: { icon: Bell, color: "var(--data-4)", label: () => m.event_alarm() },
-	obstacle: {
-		icon: OctagonAlert,
-		color: "var(--data-2)",
-		label: () => m.event_obstacle(),
-	},
-	recovery: {
-		icon: RotateCcw,
-		color: "var(--muted)",
-		label: () => m.event_recovery(),
-	},
-	recovery_fail: {
-		icon: RotateCcw,
-		color: "var(--data-4)",
-		label: () => m.event_recovery_fail(),
-	},
-	zone: { icon: MapPinned, color: "var(--muted)", label: () => m.event_zone() },
-	pending: {
-		icon: Clock,
-		color: "var(--muted)",
-		label: () => m.event_pending(),
 	},
 };
 

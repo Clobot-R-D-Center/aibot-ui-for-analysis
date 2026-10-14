@@ -36,8 +36,8 @@ function loadImage(
  * Loads a ROS map from a directory holding `map.yaml` + its image.
  * `nonce` forces a reload (retry, or a new map version). `baseUrl` null = no
  * map yet (stays loading). A reload keeps showing the current map until the
- * new one is in — and keeps it if the reload fails — so a map that SLAM keeps
- * growing updates in place instead of blinking.
+ * new one is in — and keeps it if the reload fails — so a replaced map
+ * updates in place instead of blinking.
  */
 export function useRosMap(
 	baseUrl: string | null,

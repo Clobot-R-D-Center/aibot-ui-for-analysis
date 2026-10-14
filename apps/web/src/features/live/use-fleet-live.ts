@@ -10,16 +10,16 @@ export const GATEWAY_URL: string =
 /** The gateway serves history over HTTP on the same host:port (ws→http, wss→https). */
 const GATEWAY_HTTP = GATEWAY_URL.replace(/^ws/, "http").replace(/\/$/, "");
 export const HISTORY_URL = `${GATEWAY_HTTP}/history`;
-/** The fleet map as map.yaml + map.png (it changes under SLAM; see mapVersion). */
+/** The site map as map.yaml + map.png (see mapVersion). */
 export const MAP_URL = `${GATEWAY_HTTP}/map`;
 
 export interface FleetLive {
 	/** `stale`: offline, no recent pose, or the gateway link is down */
 	robots: (LiveRobot & { stale: boolean })[];
 	connected: boolean;
-	/** content version of the gateway's map; changes as SLAM grows it; null = none yet */
+	/** content version of the gateway's map file; null = none */
 	mapVersion: string | null;
-	/** mapping session of that map; changes when a new map (frame) starts */
+	/** mapping session of that map; changes with another map file */
 	mapSession: string | null;
 }
 

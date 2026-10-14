@@ -7,7 +7,6 @@ const LABEL: Record<KpiKey, () => string> = {
 	distance: () => m.kpi_distance(),
 	uptime: () => m.kpi_uptime(),
 	run: () => m.kpi_run(),
-	success: () => m.kpi_success(),
 	errors: () => m.kpi_errors(),
 	wait: () => m.kpi_wait(),
 };
@@ -16,7 +15,6 @@ const LABEL: Record<KpiKey, () => string> = {
 const LOWER_IS_BETTER = new Set<KpiKey>(["errors", "wait"]);
 
 function fmt(k: Kpi) {
-	if (k.value === null) return "—";
 	if (k.key === "errors") return Math.round(k.value).toString();
 	return k.value >= 100 ? Math.round(k.value).toString() : k.value.toFixed(1);
 }
@@ -37,7 +35,7 @@ export function KpiStrip({ kpis }: { kpis: Kpi[] }) {
 							</span>
 						</div>
 						<div
-							className={`stat-desc mt-1 flex items-center gap-1 ${good ? "text-success" : "text-error"} ${k.value === null ? "invisible" : ""}`}
+							className={`stat-desc mt-1 flex items-center gap-1 ${good ? "text-success" : "text-error"}`}
 						>
 							{up ? (
 								<TrendingUp className="size-3.5" aria-hidden />

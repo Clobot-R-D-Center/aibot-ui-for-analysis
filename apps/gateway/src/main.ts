@@ -4,17 +4,11 @@
 // protocol (see LiveMessage) — so the UI never knows which robots it shows.
 import { existsSync } from "node:fs";
 import http from "node:http";
-import type { FleetSink, MapGrid, StartAdapter } from "@aibot/fleet-adapter";
+import { fileURLToPath } from "node:url";
+import type { FleetSink, StartAdapter } from "@aibot/fleet-adapter";
 import { WebSocketServer } from "ws";
 import { type Days, openHistory } from "./history.ts";
-import {
-	mapPng,
-	mapStats,
-	mapVersion,
-	mapYaml,
-	readMapFile,
-	validGrid,
-} from "./map.ts";
+import { readMapFile } from "./map.ts";
 
 // Settings may also come from ./.env; the shell's own variables win. Read here,
 // not via node --env-file, so a packaged binary (SEA, pkg) reads it too.
@@ -25,9 +19,14 @@ const HISTORY_DB = process.env.HISTORY_DB ?? "history.db";
 // 30-day view + the previous 30 days its deltas compare against.
 const HISTORY_DAYS = Number(process.env.HISTORY_DAYS ?? 62);
 const ADAPTER = process.env.FLEET_ADAPTER ?? "sim";
-// ponytail: SLAM may republish the map every second; re-encoding the PNG and
-// making every browser reload it at that rate is waste. Raise for big maps.
-const MAP_MIN_MS = 2000;
+// The site map (map_server map.yaml + PNG). The simulator's world is a map file
+// of its own, so the sim runs with no settings.
+// ponytail: a sim-only default in the core; goes once maps load per format
+const MAP_FILE =
+	process.env.MAP_FILE ??
+	(ADAPTER === "sim"
+		? fileURLToPath(import.meta.resolve("@aibot/adapter-sim/map/map.yaml"))
+		: undefined);
 
 /** What browsers receive (apps/web/src/features/live/fleet.ts reads it). */
 export type LiveMessage =
@@ -43,19 +42,6 @@ export type LiveMessage =
 			poses: { robot: string; x: number; y: number; theta: number }[];
 	  }
 	| { type: "plan"; robot: string; points: [number, number][] }
-	| {
-			type: "battery";
-			robot: string;
-			charge: number;
-			charging: boolean;
-			eStop: boolean;
-	  }
-	| {
-			type: "alarms";
-			robot: string;
-			alarms: { code: string; level: string; text: string }[];
-	  }
-	| { type: "link"; robot: string; up: boolean }
 	| { type: "map"; version: string; session: string };
 
 // Robot radius for coverage (m): the width of the band a robot sweeps.
@@ -70,14 +56,14 @@ const server = http.createServer((req, res) => {
 	const url = new URL(req.url ?? "/", "http://gateway");
 	if (url.pathname === "/map/map.yaml" || url.pathname === "/map/map.png") {
 		if (!mapFiles) {
-			res.writeHead(404).end("no map yet");
+			res.writeHead(404).end("no map (MAP_FILE)");
 			return;
 		}
 		const png = url.pathname.endsWith(".png");
 		res
 			.writeHead(200, {
 				"Content-Type": png ? "image/png" : "text/yaml",
-				// The map changes under SLAM; the WS "map" message says when.
+				// A restart may load another file; the WS "map" message says when.
 				"Cache-Control": "no-store",
 			})
 			.end(png ? mapFiles.png : mapFiles.yaml);
@@ -107,8 +93,8 @@ const wss = new WebSocketServer({ server });
 // the socket closes itself afterwards, so logging is all that's needed.
 wss.on("connection", (ws) => {
 	ws.on("error", (e) => console.warn(`[gateway] ws client: ${e.message}`));
-	// Some messages are only sent on change (link, alarms, a cleared plan), so
-	// a browser joining later starts from the latest of each.
+	// Some messages are only sent on change (the map, a cleared plan), so a
+	// browser joining later starts from the latest of each.
 	for (const data of latest.values()) ws.send(data);
 });
 
@@ -121,7 +107,7 @@ function send(msg: LiveMessage) {
 	for (const ws of wss.clients) {
 		if (ws.readyState !== ws.OPEN) continue;
 		// Too far behind to catch up. Skipping messages would lose change-only
-		// ones (alarms, link, a cleared plan), so drop it instead: the browser
+		// ones (the map, a cleared plan), so drop it instead: the browser
 		// reconnects and gets the full replay of the latest of each.
 		if (ws.bufferedAmount > 1 << 20) ws.terminate();
 		else ws.send(data);
@@ -137,48 +123,15 @@ function safely(what: string, f: () => void) {
 	}
 }
 
-/** The latest map as served files; null until an adapter reports one. */
-let mapFiles: { yaml: string; png: Buffer; version: string } | null = null;
-// A site map file (MAP_FILE=path/to/map.yaml) is shown until the adapter
-// reports a map of its own (e.g. live SLAM), which then replaces it.
-// ponytail: a later adapter map without a session id may continue the file's
-// session; give it MapGrid.session if their frames differ.
-if (process.env.MAP_FILE) {
-	const f = readMapFile(process.env.MAP_FILE);
-	mapFiles = { yaml: f.yaml, png: f.png, version: f.version };
-	const session = history.mapSeen(
-		Date.now(),
-		{ known: 0, resolution: f.resolution },
-		f.version,
-	);
+/** The map file as served; null without one. */
+let mapFiles: { yaml: string; png: Buffer } | null = null;
+if (MAP_FILE) {
+	const f = readMapFile(MAP_FILE);
+	mapFiles = { yaml: f.yaml, png: f.png };
+	// Coverage follows the map: another map file starts another session.
+	const session = history.mapSeen(Date.now(), f.version);
 	send({ type: "map", version: f.version, session });
-	console.log(`[gateway] map file ${process.env.MAP_FILE}`);
-}
-let pendingMap: MapGrid | null = null;
-let mapTimer: ReturnType<typeof setTimeout> | null = null;
-let lastMapAt = 0;
-
-/** Encodes at most every MAP_MIN_MS, always ending on the latest grid. */
-function queueMap(grid: MapGrid) {
-	pendingMap = grid;
-	if (mapTimer) return;
-	mapTimer = setTimeout(
-		() => {
-			mapTimer = null;
-			const g = pendingMap;
-			pendingMap = null;
-			if (!g) return;
-			safely("map", () => {
-				const version = mapVersion(g);
-				if (mapFiles?.version === version) return;
-				mapFiles = { yaml: mapYaml(g), png: mapPng(g), version };
-				lastMapAt = Date.now();
-				const session = history.mapSeen(lastMapAt, mapStats(g), g.session);
-				send({ type: "map", version, session });
-			});
-		},
-		Math.max(0, lastMapAt + MAP_MIN_MS - Date.now()),
-	);
+	console.log(`[gateway] map file ${MAP_FILE}`);
 }
 
 const sink: FleetSink = {
@@ -202,31 +155,6 @@ const sink: FleetSink = {
 	},
 	wait(robot, at) {
 		safely("wait", () => history.wait(robot, Date.now(), at));
-	},
-	task(robot, ok, detail) {
-		safely("task", () => history.task(robot, Date.now(), ok, detail));
-	},
-	event(robot, kind, detail) {
-		safely("event", () => history.event(robot, Date.now(), kind, detail));
-	},
-	alarms(robot, active) {
-		safely("alarms", () => history.alarms(robot, Date.now(), active));
-		send({
-			type: "alarms",
-			robot,
-			alarms: active.map((a) => ({ ...a, code: String(a.code) })),
-		});
-	},
-	battery(robot, b) {
-		send({ type: "battery", robot, ...b });
-	},
-	link(robot, up) {
-		console.log(`[gateway] ${robot} detail link ${up ? "up" : "down"}`);
-		send({ type: "link", robot, up });
-	},
-	map(grid) {
-		if (validGrid(grid)) queueMap(grid);
-		else console.warn("[gateway] map: grid size doesn't match its data");
 	},
 	lost() {
 		safely("lost", () => history.markAllOffline(Date.now()));

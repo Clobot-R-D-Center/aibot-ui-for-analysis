@@ -52,7 +52,7 @@ export function DashboardShell() {
 		key: live.mapSession ?? "",
 	});
 	const [mapNonce, setMapNonce] = useState(0);
-	// The gateway's map, reloaded whenever its version changes (SLAM).
+	// The gateway's map, reloaded whenever its version changes.
 	const map = useRosMap(
 		live.mapVersion ? MAP_URL : null,
 		`${live.mapVersion}:${mapNonce}`,
@@ -171,15 +171,7 @@ export function DashboardShell() {
 function KpiSkeleton() {
 	return (
 		<div className="stats stats-vertical w-full border border-base-300 bg-base-100 shadow-sm sm:stats-horizontal">
-			{[
-				"coverage",
-				"distance",
-				"uptime",
-				"run",
-				"success",
-				"errors",
-				"wait",
-			].map((k) => (
+			{["coverage", "distance", "uptime", "run", "errors", "wait"].map((k) => (
 				<div className="stat gap-2" key={k}>
 					<div className="skeleton h-3 w-20" />
 					<div className="skeleton h-7 w-24" />

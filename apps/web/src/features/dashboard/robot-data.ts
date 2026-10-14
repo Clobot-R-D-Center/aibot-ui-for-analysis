@@ -11,14 +11,12 @@ export type KpiKey =
 	| "distance"
 	| "uptime"
 	| "run"
-	| "success"
 	| "errors"
 	| "wait";
 
 export interface Kpi {
 	key: KpiKey;
-	/** null = no data for it (e.g. the source reports no tasks) */
-	value: number | null;
+	value: number;
 	unit: string;
 	/** signed % change vs previous period */
 	delta: number;
@@ -39,15 +37,7 @@ export type EventKind =
 	| "error"
 	| "pause"
 	| "state"
-	| "wait"
-	| "task_ok"
-	| "task_fail"
-	| "alarm"
-	| "obstacle"
-	| "recovery"
-	| "recovery_fail"
-	| "zone"
-	| "pending";
+	| "wait";
 
 export interface RobotEvent {
 	time: string;

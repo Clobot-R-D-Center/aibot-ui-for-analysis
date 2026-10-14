@@ -8,7 +8,6 @@ import type { Mode } from "@aibot/fleet-adapter";
 import {
 	bucketsFor,
 	intervals,
-	isNewSession,
 	msWhere,
 	openHistory,
 	sweptCells,
@@ -63,12 +62,8 @@ test("records a morning and aggregates it", () => {
 	h.pose(robot, at(10, 10, 30), 2500, 0); // after a gap: new segment, no distance
 	st(at(10, 30), "run", "RUN");
 	st(at(10, 30), "run", "RUN"); // repeats are deduped
-	h.task(robot, at(10, 50), true, "arrived");
-	h.event(robot, at(10, 55), "obstacle", "front");
 	st(at(11), "error", "ERROR");
 	h.wait(robot, at(11), "N1");
-	h.alarms(robot, at(11), [{ code: 7, level: "WARN", text: "low battery" }]);
-	h.alarms(robot, at(11, 5), [{ code: 7, level: "WARN", text: "low battery" }]); // still active: not re-raised
 	st(at(11, 10), "idle", "IDLE");
 	h.wait(robot, at(11, 20), null);
 	h.markAllOffline(at(12)); // source lost
@@ -79,7 +74,6 @@ test("records a morning and aggregates it", () => {
 	assert.equal(kpi.distance, 2.4);
 	assert.equal(kpi.uptime, 8.5); // 2 h of 23.5 h elapsed
 	assert.equal(kpi.run, 25); // 30 min run / 120 min online
-	assert.equal(kpi.success, 100);
 	assert.equal(kpi.errors, 1);
 	assert.equal(kpi.wait, 20);
 	assert.ok(r.kpis.every((k) => k.delta === 0)); // empty previous period
@@ -103,19 +97,10 @@ test("records a morning and aggregates it", () => {
 			["11:10", "state", "ERROR → IDLE"],
 			["11:00", "error", "RUN → ERROR"],
 			["11:00", "wait", "N1"],
-			["11:00", "alarm", "[WARN] 7 low battery"],
-			["10:55", "obstacle", "front"],
-			["10:50", "task_ok", "arrived"],
 			["10:30", "run_start", "IDLE → RUN"],
 			["10:00", "online", "IDLE"],
 		],
 	);
-});
-
-test("no tasks recorded means no success rate, not 0 %", () => {
-	const h = openHistory(":memory:");
-	const r = h.query("nobody", 1, Date.now());
-	assert.equal(r.kpis.find((k) => k.key === "success")?.value, null);
 });
 
 test("a restart closes a wait left open by a crash", () => {
@@ -146,22 +131,14 @@ test("pruning keeps the state that still holds after the cutoff", () => {
 	assert.equal(uptime, 100); // online, unchanged, for the whole day
 });
 
-test("a map that shrinks a lot or changes resolution is a new session", () => {
-	const prev = { known: 1000, resolution: 0.05 };
-	assert.ok(!isNewSession(prev, { known: 1500, resolution: 0.05 })); // grew
-	assert.ok(!isNewSession(prev, { known: 900, resolution: 0.05 })); // loop closure trim
-	assert.ok(isNewSession(prev, { known: 300, resolution: 0.05 })); // restarted
-	assert.ok(isNewSession(prev, { known: 1000, resolution: 0.1 }));
-});
-
 test("coverage cells are kept per mapping session", () => {
 	const h = openHistory(":memory:", at(9));
 	const robot = "robot-a";
 	h.state(robot, at(9), { online: true, mode: "run", label: "RUN" });
-	const first = h.mapSeen(at(9), { known: 100, resolution: 0.05 });
-	assert.equal(h.mapSeen(at(9, 30), { known: 400, resolution: 0.05 }), first); // grows
+	const first = h.mapSeen(at(9), "file-a");
+	assert.equal(h.mapSeen(at(9, 30), "file-a"), first); // same file
 	for (let i = 0; i < 3; i++) h.pose(robot, at(10) + i * 1000, i, 0); // first session: 3 cells, 1 m apart
-	const second = h.mapSeen(at(11), { known: 50, resolution: 0.05 }); // SLAM restarted
+	const second = h.mapSeen(at(11), "file-b"); // another map file
 	assert.notEqual(second, first);
 	h.pose(robot, at(11, 30), 40, 40);
 
@@ -175,16 +152,6 @@ test("coverage cells are kept per mapping session", () => {
 		),
 	);
 	assert.equal(r.kpis.find((k) => k.key === "distance")?.value, 0); // time KPIs untouched (2 m ≈ 0.0 km)
-
-	// an id from the adapter wins over guessing
-	assert.equal(
-		h.mapSeen(at(12), { known: 10, resolution: 0.05 }, "map-42"),
-		"map-42",
-	);
-	assert.equal(
-		h.mapSeen(at(12, 1), { known: 1, resolution: 0.05 }, "map-42"),
-		"map-42",
-	);
 });
 
 test("a restart continues the session, and old databases gain the column", () => {
@@ -198,9 +165,9 @@ test("a restart continues the session, and old databases gain the column", () =>
 	old.close();
 
 	const a = openHistory(file, at(9));
-	const id = a.mapSeen(at(9), { known: 100, resolution: 0.05 });
+	const id = a.mapSeen(at(9), "file-a");
 	const b = openHistory(file, at(10)); // gateway restarted
-	assert.equal(b.mapSeen(at(10), { known: 120, resolution: 0.05 }), id);
+	assert.equal(b.mapSeen(at(10), "file-a"), id);
 	assert.equal(b.query("robot-a", 1, at(12)).session?.id, id);
 });
 

@@ -1,8 +1,5 @@
 import { Canvas } from "@react-three/fiber";
 import {
-	BatteryCharging,
-	BatteryMedium,
-	Bell,
 	Bot,
 	Crosshair,
 	Eye,
@@ -14,7 +11,6 @@ import {
 	TriangleAlert,
 } from "lucide-react";
 import { type ReactNode, useMemo, useRef, useState } from "react";
-import type { LiveRobot } from "#/features/live/fleet";
 import type { FleetLive } from "#/features/live/use-fleet-live";
 import { m } from "#/paraglide/messages.js";
 import { type MapRobot, MapScene, type ViewApi } from "./MapScene";
@@ -112,7 +108,6 @@ export function MapPanel({
 			};
 		});
 	}, [choices, live]);
-	const detail = live.robots.find((r) => r.name === robotId) ?? null;
 
 	return (
 		<div className="relative h-full w-full overflow-hidden rounded-xl border border-border bg-canvas text-ink">
@@ -148,7 +143,6 @@ export function MapPanel({
 					<Readout
 						cursor={cursor}
 						robot={selected}
-						detail={detail}
 						resolution={ready.meta.resolution}
 					/>
 					<div className="absolute right-4 bottom-4 z-10 flex flex-col gap-1.5">
@@ -329,13 +323,10 @@ function Swatch({ varName, hatched }: { varName: string; hatched?: boolean }) {
 function Readout({
 	cursor,
 	robot,
-	detail,
 	resolution,
 }: {
 	cursor: { x: number; y: number } | null;
 	robot: MapRobot | null;
-	/** live only: battery/alarms of the selected robot */
-	detail?: LiveRobot | null;
 	resolution: number;
 }) {
 	return (
@@ -363,7 +354,6 @@ function Readout({
 					<span className="text-faint">—</span>
 				)}
 			</Row>
-			{detail && <DetailRows r={detail} stale={!!robot?.stale} />}
 			<Row
 				icon={<span className="inline-block size-3.5" />}
 				label={m.readout_resolution()}
@@ -373,55 +363,6 @@ function Readout({
 				</span>
 			</Row>
 		</dl>
-	);
-}
-
-/** Battery and alarms, from the adapter's per-robot detail channel. */
-function DetailRows({ r, stale }: { r: LiveRobot; stale: boolean }) {
-	const b = r.battery;
-	const ink = stale ? "text-faint" : "text-ink";
-	const BatteryIcon = b?.charging ? BatteryCharging : BatteryMedium;
-	return (
-		<>
-			{/* Not every robot stack reports a battery; no row until one does. */}
-			{b && (
-				<Row
-					icon={<BatteryIcon className="size-3.5" />}
-					label={m.readout_battery()}
-				>
-					{r.link !== false ? (
-						<span className={`tnum ${ink}`}>
-							{Math.round(b.charge)}%
-							{b.charging && <> · {m.readout_charging()}</>}
-							{b.eStop && (
-								<span className="font-medium text-error">
-									{" "}
-									· {m.readout_estop()}
-								</span>
-							)}
-						</span>
-					) : (
-						<span className="text-faint">{m.readout_no_link()}</span>
-					)}
-				</Row>
-			)}
-			{r.link !== null && (
-				<Row icon={<Bell className="size-3.5" />} label={m.readout_alarms()}>
-					{r.alarms.length > 0 ? (
-						<span
-							className={`block max-w-48 truncate ${stale ? "text-faint" : "text-error"}`}
-							title={r.alarms
-								.map((a) => `[${a.level}] ${a.code} ${a.text}`)
-								.join("\n")}
-						>
-							{r.alarms.length} · {r.alarms[0].text || r.alarms[0].code}
-						</span>
-					) : (
-						<span className="text-faint">{m.readout_none()}</span>
-					)}
-				</Row>
-			)}
-		</>
 	);
 }
 

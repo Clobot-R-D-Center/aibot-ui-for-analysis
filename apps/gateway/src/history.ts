@@ -1,9 +1,9 @@
 // Records what adapters report into SQLite and answers /history queries.
-// Raw-ish rows are kept (state changes, wait changes, moving pose samples,
-// tasks, events) and every KPI is computed at query time, so KPI definitions
+// Raw-ish rows are kept (state changes, wait changes, moving pose samples)
+// and every KPI is computed at query time, so KPI definitions
 // can change later without losing what was already recorded.
 import { DatabaseSync } from "node:sqlite";
-import type { AdapterEventKind, Alarm, Mode } from "@aibot/fleet-adapter";
+import type { Mode } from "@aibot/fleet-adapter";
 
 /** Coverage grid cell, meters. Cells are world-aligned: floor(x / CELL). */
 export const CELL = 0.1;
@@ -17,22 +17,6 @@ const SAMPLE_MS = 1000; // at most one track row per robot per second
 const MIN_STEP = 0.05; // m; smaller moves are jitter, not travel
 const MAX_GAP = 5000; // ms; a longer silence starts a new segment (d = 0)
 const MAX_STEP = 5; // m per sample; more is a relocalization jump, not travel
-// ponytail: tuning knob — SLAM maps only grow (loop closures shave a little);
-// a map this much smaller than the last is a new mapping run.
-const RESTART_SHRINK = 0.5;
-
-export interface MapStats {
-	known: number;
-	resolution: number;
-}
-
-/** Without an id from the adapter: a new session when the map restarted. */
-export function isNewSession(prev: MapStats, next: MapStats): boolean {
-	return (
-		next.resolution !== prev.resolution ||
-		next.known < prev.known * RESTART_SHRINK
-	);
-}
 
 export type Days = 1 | 7 | 30;
 
@@ -109,11 +93,7 @@ export type EventKind =
 	| "error"
 	| "pause"
 	| "state"
-	| "wait"
-	| "task_ok"
-	| "task_fail"
-	| "alarm"
-	| AdapterEventKind;
+	| "wait";
 
 export interface HistoryEvent {
 	t: number;
@@ -212,10 +192,6 @@ export function openHistory(
 		CREATE INDEX IF NOT EXISTS state_rt ON state (robot, t);
 		CREATE TABLE IF NOT EXISTS wait (robot TEXT, t INTEGER, at TEXT);
 		CREATE INDEX IF NOT EXISTS wait_rt ON wait (robot, t);
-		CREATE TABLE IF NOT EXISTS task (robot TEXT, t INTEGER, ok INTEGER, detail TEXT);
-		CREATE INDEX IF NOT EXISTS task_rt ON task (robot, t);
-		CREATE TABLE IF NOT EXISTS event (robot TEXT, t INTEGER, kind TEXT, detail TEXT);
-		CREATE INDEX IF NOT EXISTS event_rt ON event (robot, t);
 		CREATE TABLE IF NOT EXISTS map_session (id TEXT, t INTEGER, known INTEGER, resolution REAL);
 	`);
 	// Databases from before mapping sessions: their travel has no session.
@@ -239,13 +215,8 @@ export function openHistory(
 			"INSERT INTO track (robot, t, d, cx, cy, session, x, y) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 		),
 		session: db.prepare("INSERT INTO map_session VALUES (?, ?, ?, ?)"),
-		sessionStats: db.prepare(
-			"UPDATE map_session SET known = ?, resolution = ? WHERE id = ?",
-		),
 		state: db.prepare("INSERT INTO state VALUES (?, ?, ?, ?, ?)"),
 		wait: db.prepare("INSERT INTO wait VALUES (?, ?, ?)"),
-		task: db.prepare("INSERT INTO task VALUES (?, ?, ?, ?)"),
-		event: db.prepare("INSERT INTO event VALUES (?, ?, ?, ?)"),
 	};
 
 	// Current per-robot view, so only changes are written.
@@ -253,20 +224,13 @@ export function openHistory(
 		string,
 		State & {
 			at: string | null;
-			alarms: Set<string>;
 			last?: { t: number; x: number; y: number };
 		}
 	>();
 	const get = (robot: string) => {
 		let r = cur.get(robot);
 		if (!r) {
-			r = {
-				online: false,
-				mode: "other",
-				label: "",
-				at: null,
-				alarms: new Set(),
-			};
+			r = { online: false, mode: "other", label: "", at: null };
 			cur.set(robot, r);
 		}
 		return r;
@@ -278,10 +242,7 @@ export function openHistory(
 			return;
 		Object.assign(r, s);
 		ins.state.run(robot, t, s.online ? 1 : 0, s.mode, s.label);
-		if (!s.online) {
-			wait(robot, t, null);
-			r.alarms.clear();
-		}
+		if (!s.online) wait(robot, t, null);
 	}
 	function wait(robot: string, t: number, at: string | null) {
 		const r = get(robot);
@@ -317,49 +278,23 @@ export function openHistory(
 		);
 	}
 
-	function task(robot: string, t: number, ok: boolean, detail: string) {
-		ins.task.run(robot, t, ok ? 1 : 0, detail);
-	}
-	function event(robot: string, t: number, kind: EventKind, detail: string) {
-		ins.event.run(robot, t, kind, detail);
-	}
-	/** Records only newly raised alarms (the adapter reports the whole active list). */
-	function alarms(robot: string, t: number, active: Alarm[]) {
-		const r = get(robot);
-		const now = new Set(active.map((a) => String(a.code)));
-		for (const a of active)
-			if (!r.alarms.has(String(a.code)))
-				event(
-					robot,
-					t,
-					"alarm",
-					`[${a.level || "?"}] ${a.code}${a.text ? ` ${a.text}` : ""}`,
-				);
-		r.alarms = now;
-	}
-
 	/**
 	 * Mapping session: coverage cells are only comparable within one map frame,
-	 * so travel is tagged with the session and cells are read for the current
-	 * one only. Restored from the last row, so a gateway restart continues it.
+	 * so travel is tagged with the session (the map file's version) and cells
+	 * are read for the current one only. Restored from the last row, so a
+	 * gateway restart continues it.
 	 */
 	let session = (db
 		.prepare("SELECT * FROM map_session ORDER BY rowid DESC LIMIT 1")
-		.get() ?? null) as ({ id: string; t: number } & MapStats) | null;
+		.get() ?? null) as { id: string; t: number } | null;
 
-	/** A map was published: continue the current session or start a new one. */
-	function mapSeen(t: number, stats: MapStats, id?: string): string {
-		const fresh = id
-			? id !== session?.id
-			: !session || isNewSession(session, stats);
-		if (fresh) {
-			session = { id: id ?? `map-${t}`, t, ...stats };
-			ins.session.run(session.id, t, stats.known, stats.resolution);
-		} else if (session) {
-			Object.assign(session, stats);
-			ins.sessionStats.run(stats.known, stats.resolution, session.id);
+	/** A map was loaded: continue the current session or start a new one. */
+	function mapSeen(t: number, id: string): string {
+		if (id !== session?.id) {
+			session = { id, t };
+			ins.session.run(id, t, null, null);
 		}
-		return (session as { id: string }).id;
+		return id;
 	}
 
 	/**
@@ -404,15 +339,6 @@ export function openHistory(
 		),
 		distance: db.prepare(
 			"SELECT CAST((t - ?) / ? AS INTEGER) AS b, SUM(d) AS d FROM track WHERE robot = ? AND t >= ? AND t < ? GROUP BY b",
-		),
-		tasks: db.prepare(
-			"SELECT COUNT(*) AS n, SUM(ok) AS ok FROM task WHERE robot = ? AND t >= ? AND t < ?",
-		),
-		taskRows: db.prepare(
-			"SELECT t, ok, detail FROM task WHERE robot = ? AND t >= ? AND t < ?",
-		),
-		eventRows: db.prepare(
-			"SELECT t, kind, detail FROM event WHERE robot = ? AND t >= ? AND t < ?",
 		),
 		samples: db.prepare(
 			"SELECT x, y, d FROM track WHERE robot = ? AND t >= ? AND t < ? AND session IS ? AND x IS NOT NULL ORDER BY t",
@@ -469,13 +395,7 @@ export function openHistory(
 				stateBefore(a),
 				sRows.filter((r) => r.t >= a && r.t < b),
 			).filter((e) => e.kind === "error").length;
-			const tasks = q.tasks.get(robot, a, b) as {
-				n: number;
-				ok: number | null;
-			};
 			return {
-				// null = no tasks recorded (the adapter may not report any), not 0 %
-				success: tasks.n > 0 ? pct(tasks.ok ?? 0, tasks.n) : null,
 				distance: dist(a, b) / 1000,
 				uptime: pct(on, b - a),
 				run: pct(msWhere(sIv, running, a, b), on),
@@ -527,16 +447,6 @@ export function openHistory(
 			...wRows
 				.filter((r) => r.t >= from && r.v !== null)
 				.map((r) => ({ t: r.t, kind: "wait" as const, detail: r.v as string })),
-			...(q.taskRows.all(robot, from, now) as Row[]).map((r) => ({
-				t: r.t as number,
-				kind: (r.ok ? "task_ok" : "task_fail") as EventKind,
-				detail: r.detail as string,
-			})),
-			...(q.eventRows.all(robot, from, now) as Row[]).map((r) => ({
-				t: r.t as number,
-				kind: r.kind as EventKind,
-				detail: r.detail as string,
-			})),
 		]
 			.sort((a, b) => b.t - a.t)
 			.slice(0, 50)
@@ -561,15 +471,6 @@ export function openHistory(
 					value: round1(c.run),
 					unit: "%",
 					delta: delta(c.run, p.run),
-				},
-				{
-					key: "success",
-					value: c.success === null ? null : round1(c.success),
-					unit: "%",
-					delta:
-						c.success === null || p.success === null
-							? 0
-							: delta(c.success, p.success),
 				},
 				{
 					key: "errors",
@@ -611,8 +512,7 @@ export function openHistory(
 
 	function prune(keepDays: number, now: number) {
 		const cut = now - keepDays * DAY;
-		for (const table of ["track", "task", "event"])
-			db.prepare(`DELETE FROM ${table} WHERE t < ?`).run(cut);
+		db.prepare("DELETE FROM track WHERE t < ?").run(cut);
 		// state/wait rows are transitions: the last one before the cutoff still
 		// says what held from the cutoff on, so it stays.
 		for (const table of ["state", "wait"])
@@ -625,9 +525,6 @@ export function openHistory(
 		state,
 		wait,
 		pose,
-		task,
-		event,
-		alarms,
 		mapSeen,
 		markAllOffline,
 		query,

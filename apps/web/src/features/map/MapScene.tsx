@@ -57,7 +57,7 @@ function CameraRig({
 	}, [gl, camera, controls, invalidate, rect]);
 
 	// Auto-fit exactly once, after controls exist and layout settles. Not again
-	// when the map grows (SLAM): that would yank away a view the user panned.
+	// when the map is replaced: that would yank away a view the user panned.
 	// The reset button re-fits on demand.
 	const fitted = useRef(false);
 	useEffect(() => {
@@ -129,7 +129,7 @@ export function MapScene({
 	useEffect(() => invalidate(), [invalidate, theme, robots, layers, heat]);
 
 	// Fixed at the first map, so r3f/drei apply them once and never snap the
-	// camera back — not on re-renders, nor when a growing (SLAM) map moves rect.
+	// camera back — not on re-renders, nor when a replaced map moves rect.
 	const [initialPos] = useState<[number, number, number]>(() => [
 		rect.centerX,
 		rect.centerY,

@@ -27,19 +27,6 @@ describe("applyMessage", () => {
 				[2.5, 0],
 			],
 		});
-		f = applyMessage(f, {
-			type: "battery",
-			robot: "robot-a",
-			charge: 87.5,
-			charging: true,
-			eStop: false,
-		});
-		f = applyMessage(f, {
-			type: "alarms",
-			robot: "robot-a",
-			alarms: [{ code: "7", level: "WARN", text: "hot" }],
-		});
-		f = applyMessage(f, { type: "link", robot: "robot-a", up: true });
 
 		expect(f["robot-a"]).toMatchObject({
 			pose: { x: 1.5, y: -2.25 },
@@ -51,15 +38,6 @@ describe("applyMessage", () => {
 				[1, -1],
 				[2.5, 0],
 			],
-			battery: { charge: 87.5, charging: true, eStop: false },
-			alarms: [{ code: "7", level: "WARN", text: "hot" }],
-			link: true,
-		});
-		// a fresh robot has no detail data yet
-		expect(f["robot-b"]).toMatchObject({
-			battery: null,
-			alarms: [],
-			link: null,
 		});
 	});
 
@@ -72,9 +50,6 @@ describe("applyMessage", () => {
 			{ type: "poses", poses: [{ robot: "r", x: 1 }] },
 			{ type: "state", robot: "r" },
 			{ type: "plan", robot: "r", points: [[1, "x"]] },
-			{ type: "battery", robot: "r", charge: "full" },
-			{ type: "alarms", robot: 3, alarms: [] },
-			{ type: "link", robot: "r" },
 		];
 		for (const m of junk) expect(applyMessage({}, m)).toEqual({});
 

@@ -5,12 +5,6 @@ import type { RobotPose } from "#/features/map/ros-map";
 // speaks one neutral protocol whatever robots its adapter talks to — see
 // LiveMessage in apps/gateway/src/main.ts.
 
-export interface Alarm {
-	code: string;
-	level: string;
-	text: string;
-}
-
 export interface LiveRobot {
 	name: string;
 	pose: RobotPose | null;
@@ -23,10 +17,6 @@ export interface LiveRobot {
 	mode: string;
 	/** the robot stack's own name for its state */
 	label: string;
-	battery: { charge: number; charging: boolean; eStop: boolean } | null;
-	alarms: Alarm[];
-	/** per-robot detail channel (battery, alarms); null = never reported */
-	link: boolean | null;
 }
 
 export type Fleet = Record<string, LiveRobot>;
@@ -39,9 +29,6 @@ const blank = (name: string): LiveRobot => ({
 	online: true,
 	mode: "other",
 	label: "",
-	battery: null,
-	alarms: [],
-	link: null,
 });
 
 // Off the wire, so nothing is trusted: every field read below is checked, and a
@@ -97,26 +84,6 @@ export function applyMessage(fleet: Fleet, msg: unknown, now = 0): Fleet {
 			patch(robot, { plan: m.points.map((p: number[]) => [p[0], p[1]]) });
 			return next;
 		}
-		case "battery":
-			if (!robot || !isNum(m.charge)) return fleet;
-			patch(robot, {
-				battery: { charge: m.charge, charging: !!m.charging, eStop: !!m.eStop },
-			});
-			return next;
-		case "alarms":
-			if (!robot || !Array.isArray(m.alarms)) return fleet;
-			patch(robot, {
-				alarms: m.alarms.map((a: Wire) => ({
-					code: str(a?.code),
-					level: str(a?.level),
-					text: str(a?.text),
-				})),
-			});
-			return next;
-		case "link":
-			if (!robot || typeof m.up !== "boolean") return fleet;
-			patch(robot, { link: m.up });
-			return next;
 		default:
 			return fleet;
 	}

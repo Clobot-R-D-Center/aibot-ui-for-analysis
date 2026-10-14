@@ -18,7 +18,6 @@ const start: StartAdapter = (sink, env) => {
 	// connect to your robots (read settings from env), then as data arrives:
 	sink.state("robot-1", { online: true, mode: "run", label: "MOVING" });
 	sink.poses([{ robot: "robot-1", pose: { x: 1, y: 2, theta: 0 } }]);
-	sink.task("robot-1", true, "arrived at goal");
 	return { stop() { /* disconnect */ } };
 };
 export default start;
@@ -30,17 +29,12 @@ and run the gateway with `FLEET_ADAPTER=<name>`.
 - `mode` is normalized to `idle | run | pause | error | other`. `label` is your
   stack's own state name, shown in events.
 - Report `state` periodically or on change, since repeats are deduped. Report `poses`
-  at your natural rate (~10 Hz is plenty). Report `alarms` as the full active
-  list, and the gateway records only newly raised ones.
-- Report the map with `map()` whenever it changes; the gateway dedupes and
-  throttles. If you know when a new mapping run (a new map frame) starts,
-  set `session` (e.g. a map id); otherwise the gateway guesses from the map
-  shrinking a lot. Coverage is kept per session.
+  at your natural rate (~10 Hz is plenty).
+- The map is not an adapter's job: the gateway reads it from a file (`MAP_FILE`).
 - Call `lost()` when your source disconnects. Robot states are unknown from then
   on, so that time isn't counted as uptime.
-- ROS 2 robots running
-  [foxglove_bridge](https://github.com/foxglove/ros-foxglove-bridge)?
-  `@aibot/foxglove-link` subscribes to the topics you list per robot and decodes
-  their CDR messages.
+- An adapter may pull per-robot detail from a second source (e.g. each robot's
+  foxglove_bridge) next to its fleet source; tag `archive/live-map-foxglove`
+  holds such a client.
 
 `@aibot/adapter-sim` is a complete reference adapter.
