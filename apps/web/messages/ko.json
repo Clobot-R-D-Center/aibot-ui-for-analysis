@@ -69,5 +69,9 @@
   "state_pause": "일시정지",
   "state_error": "에러",
   "state_other": "기타",
-  "state_off": "오프라인"
+  "state_off": "오프라인",
+  "map_past": "{time} 시점",
+  "map_past_loading": "{time} 시점 불러오는 중…",
+  "map_past_error": "{time} 시점을 불러오지 못했습니다",
+  "map_past_other_map": "{time} 시점은 다른 지도에서 기록되어 표시할 수 없습니다"
 }

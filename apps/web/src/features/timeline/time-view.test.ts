@@ -30,6 +30,7 @@ describe("time window", () => {
 		const past = zoom(live, 0.5, now - 12 * HOUR, now); // in on the middle
 		expect(past.end).toBe(now - 6 * HOUR);
 		expect(zoom(live, 0.5, now, now).end).toBeNull(); // in on now: still live
+		expect(zoom(live, 0.5, now - 0.02 * DAY, now).end).toBeNull(); // near now, too
 	});
 
 	it("keeps the span within limits", () => {

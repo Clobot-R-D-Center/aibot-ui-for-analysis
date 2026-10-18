@@ -49,7 +49,17 @@ const META: Record<
 	},
 };
 
-export function EventLog({ events }: { events: RobotEvent[] }) {
+/** Recorded events, newest first; picking one shows the map at that moment. */
+export function EventLog({
+	events,
+	at = null,
+	onPick,
+}: {
+	events: RobotEvent[];
+	/** the moment the map shows, to mark the event there */
+	at?: number | null;
+	onPick?: (t: number) => void;
+}) {
 	if (events.length === 0) {
 		return (
 			<div className="flex flex-col items-center gap-2 py-10 text-center text-muted">
@@ -67,24 +77,31 @@ export function EventLog({ events }: { events: RobotEvent[] }) {
 					<li
 						// biome-ignore lint/suspicious/noArrayIndexKey: same-minute events can repeat time+kind+detail; the list is replaced whole, never reordered
 						key={`${i}-${e.time}-${e.kind}`}
-						className="flex items-center gap-3 border-border/60 border-b py-2.5 last:border-0"
+						className="border-border/60 border-b last:border-0"
 					>
-						<span
-							className="grid size-7 shrink-0 place-items-center rounded-md"
-							style={{
-								background:
-									"color-mix(in oklch, var(--surface-raised), transparent)",
-							}}
+						<button
+							type="button"
+							onClick={() => onPick?.(e.t)}
+							aria-current={e.t === at ? "true" : undefined}
+							className={`flex w-full items-center gap-3 rounded-md px-1 py-2.5 text-left transition-colors hover:bg-surface-raised ${e.t === at ? "bg-surface-raised" : ""}`}
 						>
-							<Icon className="size-4" style={{ color: meta.color }} />
-						</span>
-						<div className="min-w-0 flex-1">
-							<div className="truncate text-ink text-sm">{e.detail}</div>
-							<div className="text-muted text-xs">{meta.label()}</div>
-						</div>
-						<time className="tnum shrink-0 text-faint text-xs tabular-nums">
-							{e.time}
-						</time>
+							<span
+								className="grid size-7 shrink-0 place-items-center rounded-md"
+								style={{
+									background:
+										"color-mix(in oklch, var(--surface-raised), transparent)",
+								}}
+							>
+								<Icon className="size-4" style={{ color: meta.color }} />
+							</span>
+							<div className="min-w-0 flex-1">
+								<div className="truncate text-ink text-sm">{e.detail}</div>
+								<div className="text-muted text-xs">{meta.label()}</div>
+							</div>
+							<time className="tnum shrink-0 text-faint text-xs tabular-nums">
+								{e.time}
+							</time>
+						</button>
 					</li>
 				);
 			})}

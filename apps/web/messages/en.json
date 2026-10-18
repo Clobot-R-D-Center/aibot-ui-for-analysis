@@ -69,5 +69,9 @@
   "state_pause": "Paused",
   "state_error": "Error",
   "state_other": "Other",
-  "state_off": "Offline"
+  "state_off": "Offline",
+  "map_past": "As at {time}",
+  "map_past_loading": "Loading {time}…",
+  "map_past_error": "Couldn't load {time}",
+  "map_past_other_map": "{time} was recorded on another map"
 }

@@ -4,6 +4,7 @@ import {
 	Crosshair,
 	Eye,
 	EyeOff,
+	History,
 	Maximize,
 	Minus,
 	Plus,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useMemo, useRef, useState } from "react";
 import type { FleetLive } from "#/features/live/use-fleet-live";
+import { stamp } from "#/features/timeline/time-view";
 import { m } from "#/paraglide/messages.js";
 import { type MapRobot, MapScene, type ViewApi } from "./MapScene";
 import {
@@ -48,6 +50,9 @@ interface Props {
 	live: FleetLive;
 	/** recorded coverage of the selected robot */
 	heat?: HeatGrid;
+	/** the past moment asked for instead of now, and how loading it went; null = live */
+	past?: PastView | null;
+	onLive?: () => void;
 }
 
 export function MapPanel({
@@ -58,6 +63,8 @@ export function MapPanel({
 	onSelect,
 	live,
 	heat,
+	past = null,
+	onLive,
 }: Props) {
 	const theme = useTheme();
 	const apiRef = useRef<ViewApi | null>(null);
@@ -111,7 +118,43 @@ export function MapPanel({
 	}, [choices, live]);
 
 	return (
-		<div className="relative h-full w-full overflow-hidden rounded-xl border border-border bg-canvas text-ink">
+		<div
+			className={`relative h-full w-full overflow-hidden rounded-xl border bg-canvas text-ink ${past === null ? "border-border" : "border-[var(--robot)]"}`}
+		>
+			{past !== null && (
+				<div
+					role="status"
+					className="absolute top-4 left-1/2 z-20 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--robot)] bg-surface py-1 pr-1 pl-3 text-sm shadow-sm"
+				>
+					<History
+						className="size-4 shrink-0 text-[var(--robot)]"
+						aria-hidden
+					/>
+					<span
+						className={`tnum truncate font-medium ${past.status === "error" ? "text-error" : ""} ${past.status === "loading" ? "text-muted" : ""}`}
+					>
+						{PAST_TEXT[past.status]({ time: stamp(past.at) })}
+					</span>
+					{past.status === "error" && (
+						<button
+							type="button"
+							onClick={past.onRetry}
+							className="btn btn-ghost btn-xs rounded-full"
+						>
+							{m.action_retry()}
+						</button>
+					)}
+					{onLive && (
+						<button
+							type="button"
+							onClick={onLive}
+							className="btn btn-primary btn-xs rounded-full"
+						>
+							{m.timeline_to_live()}
+						</button>
+					)}
+				</div>
+			)}
 			{ready && (
 				<Canvas
 					flat
@@ -369,6 +412,20 @@ function Swatch({ varName, hatched }: { varName: string; hatched?: boolean }) {
 		/>
 	);
 }
+
+/** A past moment on the map: shown, still loading, failed, or unshowable on this map. */
+export interface PastView {
+	at: number;
+	status: "ready" | "loading" | "error" | "other-map";
+	onRetry: () => void;
+}
+
+const PAST_TEXT: Record<PastView["status"], (p: { time: string }) => string> = {
+	ready: (p) => m.map_past(p),
+	loading: (p) => m.map_past_loading(p),
+	error: (p) => m.map_past_error(p),
+	"other-map": (p) => m.map_past_other_map(p),
+};
 
 function Readout({
 	cursor,

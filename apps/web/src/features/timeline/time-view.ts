@@ -21,6 +21,9 @@ export function rangeOf(w: Window, now: number) {
 	return { from: to - w.span, to };
 }
 
+/** Zooming within this last fraction of a live window keeps it live. */
+const LIVE_SNAP = 0.03;
+
 /** An end at or past now is live; nothing reaches back beyond MAX_SPAN. */
 function settle(span: number, end: number, now: number): Window {
 	const s = Math.min(MAX_SPAN, Math.max(MIN_SPAN, span));
@@ -41,6 +44,8 @@ export function zoom(
 	const { from, to } = rangeOf(w, now);
 	const span = Math.min(MAX_SPAN, Math.max(MIN_SPAN, w.span * factor));
 	const f = (at - from) / (to - from);
+	// Live and pointing at (almost) now: stay live rather than drift off it.
+	if (w.end === null && f > 1 - LIVE_SNAP) return { span, end: null };
 	return settle(span, at + (1 - f) * span, now);
 }
 

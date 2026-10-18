@@ -6,10 +6,11 @@ import {
 	heatFrom,
 	mapFreeGrid,
 } from "#/features/map/coverage";
-import { MapPanel } from "#/features/map/MapPanel";
+import { MapPanel, type PastView } from "#/features/map/MapPanel";
 import { useRosMap } from "#/features/map/use-ros-map";
 import { type Range, Timeline } from "#/features/timeline/Timeline";
 import { LIVE_DAY, type Window } from "#/features/timeline/time-view";
+import { useSnapshot } from "#/features/timeline/use-snapshot";
 import { useTimeline } from "#/features/timeline/use-timeline";
 import { m } from "#/paraglide/messages.js";
 import { AsyncContent } from "./AsyncContent";
@@ -53,8 +54,32 @@ export function DashboardShell() {
 	// What the timeline shows; the panels follow a selection inside it, or all of it.
 	const [view, setView] = useState<Window>(LIVE_DAY);
 	const [selection, setSelection] = useState<Range | null>(null);
-	// ponytail: the moment the map will show (time travel); phase 3 wires it in
+	// The moment the map shows; null = live.
 	const [cursor, setCursor] = useState<number | null>(null);
+	const snap = useSnapshot(cursor);
+	// What the map can honestly show of that moment. Robots of another moment
+	// stay up only while the asked one loads (the banner says so); a failed
+	// load, or a moment recorded in another map frame, shows none.
+	const sameMap = snap.session === live.mapSession;
+	let past: PastView | null = null;
+	if (cursor !== null) {
+		let status: PastView["status"] = "ready";
+		if (snap.error) status = "error";
+		else if (snap.at !== cursor) status = "loading";
+		else if (!sameMap) status = "other-map";
+		past = { at: cursor, status, onRetry: snap.retry };
+	}
+	const showPast =
+		past !== null &&
+		(past.status === "ready" || past.status === "loading") &&
+		sameMap;
+	const mapFleet =
+		cursor === null ? live : { ...live, robots: showPast ? snap.robots : [] };
+	const toLive = () => {
+		setView(LIVE_DAY);
+		setSelection(null);
+		setCursor(null);
+	};
 	const panels: Window = selection
 		? { span: selection.to - selection.from, end: selection.to }
 		: view;
@@ -137,8 +162,10 @@ export function DashboardShell() {
 							robotId={robotId}
 							choices={robots}
 							onSelect={setPicked}
-							live={live}
+							live={mapFleet}
 							heat={heat}
+							past={past}
+							onLive={toLive}
 						/>
 					</div>
 
@@ -148,7 +175,9 @@ export function DashboardShell() {
 							onRetry={retry}
 							skeleton={<ListSkeleton />}
 						>
-							{(data) => <EventLog events={data.events} />}
+							{(data) => (
+								<EventLog events={data.events} at={cursor} onPick={setCursor} />
+							)}
 						</AsyncContent>
 					</Panel>
 				</div>
