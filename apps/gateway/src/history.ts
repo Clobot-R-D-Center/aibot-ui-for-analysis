@@ -1,6 +1,6 @@
-// Records what adapters report into SQLite and answers /history queries.
-// Raw-ish rows are kept (state changes, wait changes, moving pose samples)
-// and every KPI is computed at query time, so KPI definitions
+// Records what adapters report into SQLite and answers /history, /timeline
+// and /snapshot queries. Raw-ish rows are kept (state, wait and graph place
+// changes, moving pose samples) and every KPI is computed at query time, so KPI definitions
 // can change later without losing what was already recorded.
 import { DatabaseSync } from "node:sqlite";
 import type { Mode } from "@aibot/fleet-adapter";
@@ -172,6 +172,22 @@ export function sweptCells(
 	return [...passes.values()];
 }
 
+/** The change-only key of a graph place: "n:<node>", "l:<link>" or "" (unknown). */
+function placeKey(node: string | null, link: string | null) {
+	if (node) return `n:${node}`;
+	if (link) return `l:${link}`;
+	return "";
+}
+
+/** Angle from a to b along the shorter way round, at fraction f. */
+function lerpAngle(a: number, b: number, f: number) {
+	const d = Math.atan2(Math.sin(b - a), Math.cos(b - a));
+	return a + d * f;
+}
+
+const hm = (d: Date) =>
+	`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
 // ---------- recorder + query ----------
 
 // biome-ignore lint/suspicious/noExplicitAny: SQLite rows, typed at each use
@@ -188,10 +204,13 @@ export function openHistory(
 		PRAGMA journal_mode = WAL;
 		CREATE TABLE IF NOT EXISTS track (robot TEXT, t INTEGER, d REAL, cx INTEGER, cy INTEGER);
 		CREATE INDEX IF NOT EXISTS track_rt ON track (robot, t);
+		CREATE INDEX IF NOT EXISTS track_t ON track (t); -- fleet-wide ranges (/timeline)
 		CREATE TABLE IF NOT EXISTS state (robot TEXT, t INTEGER, online INTEGER, mode TEXT, label TEXT);
 		CREATE INDEX IF NOT EXISTS state_rt ON state (robot, t);
 		CREATE TABLE IF NOT EXISTS wait (robot TEXT, t INTEGER, at TEXT);
 		CREATE INDEX IF NOT EXISTS wait_rt ON wait (robot, t);
+		CREATE TABLE IF NOT EXISTS place (robot TEXT, t INTEGER, node TEXT, link TEXT);
+		CREATE INDEX IF NOT EXISTS place_rt ON place (robot, t);
 		CREATE TABLE IF NOT EXISTS map_session (id TEXT, t INTEGER, known INTEGER, resolution REAL);
 	`);
 	// Databases from before mapping sessions: their travel has no session.
@@ -210,13 +229,21 @@ export function openHistory(
 		db.exec(
 			"ALTER TABLE track ADD COLUMN x REAL; ALTER TABLE track ADD COLUMN y REAL",
 		);
+	// The heading, for showing a robot at a past moment; older rows have none.
+	if (
+		!(db.prepare("PRAGMA table_info(track)").all() as Row[]).some(
+			(c) => c.name === "theta",
+		)
+	)
+		db.exec("ALTER TABLE track ADD COLUMN theta REAL");
 	const ins = {
 		track: db.prepare(
-			"INSERT INTO track (robot, t, d, cx, cy, session, x, y) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			"INSERT INTO track (robot, t, d, cx, cy, session, x, y, theta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		),
 		session: db.prepare("INSERT INTO map_session VALUES (?, ?, ?, ?)"),
 		state: db.prepare("INSERT INTO state VALUES (?, ?, ?, ?, ?)"),
 		wait: db.prepare("INSERT INTO wait VALUES (?, ?, ?)"),
+		place: db.prepare("INSERT INTO place VALUES (?, ?, ?, ?)"),
 	};
 
 	// Current per-robot view, so only changes are written.
@@ -224,13 +251,15 @@ export function openHistory(
 		string,
 		State & {
 			at: string | null;
+			/** "n:<node>", "l:<link>" or "" (unknown), to write changes only */
+			place: string;
 			last?: { t: number; x: number; y: number };
 		}
 	>();
 	const get = (robot: string) => {
 		let r = cur.get(robot);
 		if (!r) {
-			r = { online: false, mode: "other", label: "", at: null };
+			r = { online: false, mode: "other", label: "", at: null, place: "" };
 			cur.set(robot, r);
 		}
 		return r;
@@ -242,7 +271,10 @@ export function openHistory(
 			return;
 		Object.assign(r, s);
 		ins.state.run(robot, t, s.online ? 1 : 0, s.mode, s.label);
-		if (!s.online) wait(robot, t, null);
+		if (!s.online) {
+			wait(robot, t, null);
+			place(robot, t, null);
+		}
 	}
 	function wait(robot: string, t: number, at: string | null) {
 		const r = get(robot);
@@ -252,8 +284,33 @@ export function openHistory(
 		ins.wait.run(robot, t, at);
 	}
 
-	/** Pose samples become travel: ≤1 Hz, jitter and jumps dropped, online robots only. */
-	function pose(robot: string, t: number, x: number, y: number) {
+	/** Where on the graph an online robot is; changes only. */
+	function place(
+		robot: string,
+		t: number,
+		at: { node: string } | { link: string } | null,
+	) {
+		const r = get(robot);
+		const key = placeKey(
+			at && "node" in at ? at.node : null,
+			at && "link" in at ? at.link : null,
+		);
+		if (r.place === key || (key && !r.online)) return;
+		r.place = key;
+		ins.place.run(
+			robot,
+			t,
+			at && "node" in at ? at.node : null,
+			at && "link" in at ? at.link : null,
+		);
+	}
+
+	/**
+	 * Pose samples become travel: ≤1 Hz, jitter and jumps dropped, online robots only.
+	 * ponytail: a robot turning in place writes no row, so a past heading can lag
+	 * until it moves; sample on a heading change too if that matters.
+	 */
+	function pose(robot: string, t: number, x: number, y: number, theta: number) {
 		if (!Number.isFinite(x) || !Number.isFinite(y)) return;
 		const r = cur.get(robot);
 		if (!r?.online) return; // a stale last pose from an offline robot isn't travel
@@ -275,6 +332,7 @@ export function openHistory(
 			session?.id ?? null,
 			x,
 			y,
+			Number.isFinite(theta) ? theta : null,
 		);
 	}
 
@@ -322,6 +380,8 @@ export function openHistory(
 			label: row.label,
 		});
 	for (const row of lastRows("wait")) get(row.robot).at = row.at;
+	for (const row of lastRows("place"))
+		get(row.robot).place = placeKey(row.node, row.link);
 	markAllOffline(now);
 
 	const q = {
@@ -343,13 +403,51 @@ export function openHistory(
 		samples: db.prepare(
 			"SELECT x, y, d FROM track WHERE robot = ? AND t >= ? AND t < ? AND session IS ? AND x IS NOT NULL ORDER BY t",
 		),
+		robots: db.prepare("SELECT DISTINCT robot FROM state ORDER BY robot"),
+		fleetDistance: db.prepare(
+			"SELECT CAST((t - ?) / ? AS INTEGER) AS b, SUM(d) AS d FROM track WHERE t >= ? AND t < ? GROUP BY b",
+		),
+		stateAt: db.prepare(
+			"SELECT online, mode, label FROM state WHERE robot = ? AND t <= ? ORDER BY t DESC LIMIT 1",
+		),
+		waitAt: db.prepare(
+			"SELECT at FROM wait WHERE robot = ? AND t <= ? ORDER BY t DESC LIMIT 1",
+		),
+		placeAt: db.prepare(
+			"SELECT node, link FROM place WHERE robot = ? AND t <= ? ORDER BY t DESC LIMIT 1",
+		),
+		poseBefore: db.prepare(
+			"SELECT t, x, y, theta, session FROM track WHERE robot = ? AND t <= ? AND x IS NOT NULL ORDER BY t DESC LIMIT 1",
+		),
+		poseAfter: db.prepare(
+			"SELECT t, x, y, theta, d, session FROM track WHERE robot = ? AND t > ? AND x IS NOT NULL ORDER BY t LIMIT 1",
+		),
+		sessionAt: db.prepare(
+			"SELECT id FROM map_session WHERE t <= ? ORDER BY t DESC LIMIT 1",
+		),
 	};
 
+	/** KPIs, trends, events and coverage of the last 1/7/30 days. */
 	function query(robot: string, days: Days, now: number) {
 		const { from, size, n } = bucketsFor(days, now);
-		const span = n * size;
-		const pFrom = from - span;
-		const pTo = now - span; // same elapsed length as the current period
+		// deltas against the same stretch one whole period earlier
+		return queryRange(robot, from, now, size, n * size);
+	}
+
+	/**
+	 * The same for any [from, to), in buckets of `size` ms; deltas compare with
+	 * [from − shift, to − shift) (by default the stretch just before).
+	 */
+	function queryRange(
+		robot: string,
+		from: number,
+		now: number,
+		size: number,
+		shift = now - from,
+	) {
+		const n = Math.ceil((now - from) / size);
+		const pFrom = from - shift;
+		const pTo = now - shift;
 
 		const toState = (r: Row): State => ({
 			online: !!r.online,
@@ -412,9 +510,7 @@ export function openHistory(
 		}[];
 		const label = (t: number) => {
 			const d = new Date(t);
-			return days === 1
-				? `${String(d.getHours()).padStart(2, "0")}:00`
-				: `${d.getMonth() + 1}/${d.getDate()}`;
+			return size < DAY ? hm(d) : `${d.getMonth() + 1}/${d.getDate()}`;
 		};
 		const buckets = Array.from({ length: n }, (_, i) => {
 			const a = from + i * size;
@@ -436,8 +532,9 @@ export function openHistory(
 			);
 		const time = (t: number) => {
 			const d = new Date(t);
-			const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-			return days === 1 ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+			return now - from <= DAY
+				? hm(d)
+				: `${d.getMonth() + 1}/${d.getDate()} ${hm(d)}`;
 		};
 		const events = [
 			...stateEvents(
@@ -450,7 +547,12 @@ export function openHistory(
 		]
 			.sort((a, b) => b.t - a.t)
 			.slice(0, 50)
-			.map((e) => ({ time: time(e.t), kind: e.kind, detail: e.detail }));
+			.map((e) => ({
+				t: e.t,
+				time: time(e.t),
+				kind: e.kind,
+				detail: e.detail,
+			}));
 
 		return {
 			kpis: [
@@ -510,12 +612,113 @@ export function openHistory(
 		};
 	}
 
+	/**
+	 * The fleet over [from, to): each robot's state as merged bands
+	 * [start, end, "off" | mode] (none where nothing was recorded yet), and
+	 * the fleet's distance in `n` equal buckets (km).
+	 */
+	function timeline(from: number, to: number, n: number) {
+		const size = (to - from) / n;
+		const robots = (q.robots.all() as Row[]).map((r) => {
+			const robot = r.robot as string;
+			const s0 = q.stateBefore.get(robot, from) as Row;
+			const rows = (q.states.all(robot, from, to) as Row[]).map((r) => ({
+				t: r.t as number,
+				v: r.online ? (r.mode as string) : "off",
+			}));
+			const bands: [number, number, string][] = [];
+			for (const iv of intervals(
+				s0 ? (s0.online ? s0.mode : "off") : undefined,
+				rows,
+				from,
+				to,
+			)) {
+				const last = bands.at(-1);
+				if (last && last[2] === iv.v && last[1] === iv.start) last[1] = iv.end;
+				else bands.push([iv.start, iv.end, iv.v]);
+			}
+			return { robot, bands };
+		});
+		const sums = new Map(
+			(q.fleetDistance.all(from, size, from, to) as Row[]).map((r) => [
+				r.b as number,
+				r.d as number,
+			]),
+		);
+		return {
+			from,
+			to,
+			robots: robots.filter((r) => r.bands.length > 0),
+			distance: Array.from(
+				{ length: n },
+				(_, i) => Math.round(((sums.get(i) ?? 0) / 1000) * 1000) / 1000,
+			),
+		};
+	}
+
+	/**
+	 * Every robot as it was at `t`: state, wait, graph place and pose, and the
+	 * mapping session (map frame) in force then. The pose is interpolated
+	 * between the samples around `t` when they are one continuous stretch of
+	 * travel in that session; otherwise it is the last sample (a parked robot
+	 * writes none). null pose = no sample before `t` in that session.
+	 */
+	function snapshot(t: number) {
+		const session = ((q.sessionAt.get(t) as Row)?.id ?? null) as string | null;
+		const robots = (q.robots.all() as Row[]).flatMap((r) => {
+			const robot = r.robot as string;
+			const st = q.stateAt.get(robot, t) as Row;
+			if (!st) return []; // not known yet at t
+			const w = q.waitAt.get(robot, t) as Row;
+			const pl = q.placeAt.get(robot, t) as Row;
+			// A sample from another session is in another frame: no pose at all
+			// beats one drawn in the wrong place.
+			const a = q.poseBefore.get(robot, t) as Row;
+			const before = a && a.session === session ? a : null;
+			const b = q.poseAfter.get(robot, t) as Row;
+			let pose: { x: number; y: number; theta: number | null } | null = before
+				? { x: a.x, y: a.y, theta: a.theta }
+				: null;
+			if (
+				before &&
+				b &&
+				b.session === session &&
+				st.online &&
+				b.d > 0 &&
+				b.t - a.t <= MAX_GAP
+			) {
+				const f = (t - a.t) / (b.t - a.t);
+				pose = {
+					x: a.x + (b.x - a.x) * f,
+					y: a.y + (b.y - a.y) * f,
+					theta:
+						a.theta === null || b.theta === null
+							? a.theta
+							: lerpAngle(a.theta, b.theta, f),
+				};
+			}
+			return [
+				{
+					robot,
+					online: !!st.online,
+					mode: st.mode as string,
+					label: (st.label ?? "") as string,
+					wait: (w?.at ?? null) as string | null,
+					node: (pl?.node ?? null) as string | null,
+					link: (pl?.link ?? null) as string | null,
+					pose,
+				},
+			];
+		});
+		return { session, robots };
+	}
+
 	function prune(keepDays: number, now: number) {
 		const cut = now - keepDays * DAY;
 		db.prepare("DELETE FROM track WHERE t < ?").run(cut);
-		// state/wait rows are transitions: the last one before the cutoff still
+		// state/wait/place rows are transitions: the last one before the cutoff still
 		// says what held from the cutoff on, so it stays.
-		for (const table of ["state", "wait"])
+		for (const table of ["state", "wait", "place"])
 			db.prepare(
 				`DELETE FROM ${table} WHERE t < ? AND rowid NOT IN (SELECT max(rowid) FROM ${table} WHERE t < ? GROUP BY robot)`,
 			).run(cut, cut);
@@ -524,10 +727,14 @@ export function openHistory(
 	return {
 		state,
 		wait,
+		place,
 		pose,
 		mapSeen,
 		markAllOffline,
 		query,
+		queryRange,
+		timeline,
+		snapshot,
 		prune,
 	};
 }

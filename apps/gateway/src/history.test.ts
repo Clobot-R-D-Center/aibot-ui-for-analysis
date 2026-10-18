@@ -201,3 +201,84 @@ test("coverage sweeps the robot's width along its path, counting passes", () => 
 	);
 	assert.ok(!gap.some(([x, y]) => x === 10 && y === 0));
 });
+
+test("a snapshot shows each robot as it was at that moment", () => {
+	const h = openHistory(":memory:", at(9));
+	const r = "robot-a";
+	h.state(r, at(10), { online: true, mode: "run", label: "RUN" });
+	h.place(r, at(10), { node: "N1" });
+	h.pose(r, at(10), 0, 0, 0);
+	h.pose(r, at(10, 0, 2), 2, 0, Math.PI / 2); // 1 m/s, turning
+	h.place(r, at(10, 0, 1), { link: "L1-2" });
+	h.place(r, at(10, 0, 1), { link: "L1-2" }); // a repeat: no row
+	h.wait(r, at(10, 5), "N2");
+	h.state(r, at(10, 10), { online: false, mode: "other", label: "lost" });
+
+	const [mid] = h.snapshot(at(10, 0, 1)).robots;
+	assert.equal(mid.mode, "run");
+	assert.deepEqual([mid.node, mid.link], [null, "L1-2"]);
+	assert.equal(mid.pose?.x, 1); // halfway between the samples
+	assert.ok(Math.abs((mid.pose?.theta ?? 0) - Math.PI / 4) < 1e-9);
+
+	const [waiting] = h.snapshot(at(10, 6)).robots;
+	assert.equal(waiting.wait, "N2");
+	assert.equal(waiting.pose?.x, 2); // parked since: the last sample
+
+	const [off] = h.snapshot(at(10, 20)).robots;
+	assert.equal(off.online, false);
+	assert.deepEqual([off.wait, off.node, off.link], [null, null, null]); // cleared
+	assert.equal(off.pose?.x, 2); // last known, for a faded marker
+
+	assert.deepEqual(h.snapshot(at(9, 30)).robots, []); // not known yet
+});
+
+test("a snapshot keeps to the map session in force then", () => {
+	const h = openHistory(":memory:", at(9));
+	const r = "robot-a";
+	h.mapSeen(at(9), "map-a");
+	h.state(r, at(10), { online: true, mode: "run", label: "RUN" });
+	h.pose(r, at(10, 59, 58), 0, 0, 0);
+	h.pose(r, at(10, 59, 59), 1, 0, 0);
+	h.mapSeen(at(11), "map-b"); // the map (and its frame) changed
+	h.pose(r, at(11, 0, 1), 2, 0, 0);
+
+	const old = h.snapshot(at(10, 30));
+	assert.equal(old.session, "map-a");
+	const now = h.snapshot(at(11, 0, 0));
+	assert.equal(now.session, "map-b");
+	// the last sample is map-a's: not drawn on map-b, nor blended with map-b's
+	assert.equal(now.robots[0].pose, null);
+	assert.equal(h.snapshot(at(11, 0, 2)).robots[0].pose?.x, 2);
+});
+
+test("the timeline gives merged state bands and fleet distance", () => {
+	const h = openHistory(":memory:", at(9));
+	h.state("a", at(10), { online: true, mode: "run", label: "RUN" });
+	for (let i = 0; i <= 250; i++) h.pose("a", at(10) + i * 1000, i * 4, 0, 0); // 1 km
+	h.state("a", at(10, 30), { online: true, mode: "run", label: "MOVING" }); // same band
+	h.state("a", at(11), { online: false, mode: "other", label: "lost" });
+	h.state("b", at(10, 30), { online: true, mode: "idle", label: "IDLE" });
+
+	const tl = h.timeline(at(10), at(12), 2);
+	const a = tl.robots.find((r) => r.robot === "a");
+	assert.deepEqual(a?.bands, [
+		[at(10), at(11), "run"],
+		[at(11), at(12), "off"],
+	]);
+	assert.deepEqual(tl.robots.find((r) => r.robot === "b")?.bands, [
+		[at(10, 30), at(12), "idle"],
+	]);
+	assert.deepEqual(tl.distance, [1, 0]); // km per hour bucket
+});
+
+test("any range gives KPIs, with deltas against the stretch before", () => {
+	const h = openHistory(":memory:", at(8));
+	h.state("a", at(8), { online: true, mode: "idle", label: "IDLE" });
+	h.state("a", at(10), { online: true, mode: "run", label: "RUN" });
+	const r = h.queryRange("a", at(10), at(11), 15 * 60_000);
+	const kpi = Object.fromEntries(r.kpis.map((k) => [k.key, k]));
+	assert.equal(kpi.run.value, 100);
+	assert.equal(kpi.run.delta, 0); // the hour before was all idle: no base
+	assert.equal(r.run.length, 4); // 15-minute buckets
+	assert.equal(r.run[0].label, "10:00");
+});

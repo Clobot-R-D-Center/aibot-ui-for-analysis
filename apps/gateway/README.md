@@ -6,7 +6,13 @@ serves it on one port:
 
 - `ws://…:8787` streams live fleet state (poses, plans, mode).
   A browser that joins late gets the latest of each message first.
-- `GET /history?robot=<name>&days=1|7|30` returns KPIs, trends, events and coverage cells.
+- `GET /history?robot=<name>&days=1|7|30` (or `&from=<ms>&to=<ms>`) returns
+  KPIs with deltas against the period before, trends, events and coverage cells.
+- `GET /timeline?from=<ms>&to=<ms>&n=96` returns each robot's state bands
+  (`[start, end, "off" | mode]`) and the fleet's distance in `n` buckets (km).
+- `GET /snapshot?t=<ms>` returns the map session in force at `t` and every
+  robot as it was then: state, wait, graph place and pose (interpolated
+  between 1 Hz samples while moving; none from another session's frame).
 - `GET /map/map.yaml`, `/map/map.png` serve the site map from `MAP_DIR`, and
   `/map/site.json` its graph and zones (see `Site` in `@aibot/fleet-adapter`).
 

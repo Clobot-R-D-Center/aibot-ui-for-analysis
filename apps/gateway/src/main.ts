@@ -91,24 +91,74 @@ const server = http.createServer((req, res) => {
 			.end(png ? mapFiles.png : mapFiles.yaml);
 		return;
 	}
-	if (url.pathname !== "/history") {
-		res.writeHead(404).end();
-		return;
-	}
-	const robot = url.searchParams.get("robot");
-	const days = Number(url.searchParams.get("days"));
-	if (!robot || (days !== 1 && days !== 7 && days !== 30)) {
-		res.writeHead(400).end("robot and days=1|7|30 are required");
+	let answer: () => unknown;
+	try {
+		answer = route(url.pathname, url.searchParams);
+	} catch (e) {
+		res.writeHead((e as HttpError).status ?? 400).end((e as Error).message);
 		return;
 	}
 	try {
-		const body = JSON.stringify(history.query(robot, days as Days, Date.now()));
+		const body = JSON.stringify(answer());
 		res.writeHead(200, { "Content-Type": "application/json" }).end(body);
 	} catch (e) {
-		console.warn(`[gateway] history: ${(e as Error).message}`);
+		console.warn(`[gateway] ${url.pathname}: ${(e as Error).message}`);
 		res.writeHead(500).end();
 	}
 });
+
+type HttpError = Error & { status?: number };
+const DAY = 86_400_000;
+
+/** A time in ms from the query, or a 400. */
+function msParam(p: URLSearchParams, name: string): number {
+	const v = Number(p.get(name));
+	if (!p.get(name) || !Number.isFinite(v))
+		throw new Error(`${name} (ms) is required`);
+	return v;
+}
+
+/**
+ * [from, to) from the query, cut to what history keeps: nothing older exists,
+ * so a window reaching further back (the dashboard allows 62 days) is
+ * answered for the part there is.
+ */
+function rangeParams(p: URLSearchParams) {
+	const from = Math.max(msParam(p, "from"), Date.now() - HISTORY_DAYS * DAY);
+	const to = msParam(p, "to");
+	if (!(from < to))
+		throw new Error(`need from < to, within the last ${HISTORY_DAYS} days`);
+	return { from, to };
+}
+
+/** Checks a request's parameters and returns what computes its answer. */
+function route(path: string, p: URLSearchParams): () => unknown {
+	if (path === "/history") {
+		const robot = p.get("robot");
+		if (!robot) throw new Error("robot is required");
+		if (p.has("days")) {
+			const days = Number(p.get("days"));
+			if (days !== 1 && days !== 7 && days !== 30)
+				throw new Error("days=1|7|30");
+			return () => history.query(robot, days as Days, Date.now());
+		}
+		const { from, to } = rangeParams(p);
+		// hourly trends up to three days, daily beyond
+		const size = to - from <= 3 * DAY ? DAY / 24 : DAY;
+		return () => history.queryRange(robot, from, to, size);
+	}
+	if (path === "/timeline") {
+		const { from, to } = rangeParams(p);
+		const n = Math.min(500, Math.max(1, Math.round(Number(p.get("n") ?? 96))));
+		if (!Number.isFinite(n)) throw new Error("n must be a number");
+		return () => history.timeline(from, to, n);
+	}
+	if (path === "/snapshot") {
+		const t = msParam(p, "t");
+		return () => history.snapshot(t);
+	}
+	throw Object.assign(new Error("not found"), { status: 404 });
+}
 
 const wss = new WebSocketServer({ server });
 // ws throws an unhandled 'error' (killing the process) on a bad client frame;
@@ -188,7 +238,7 @@ const sink: FleetSink = {
 		const t = Date.now();
 		safely("poses", () => {
 			for (const { robot, pose } of poses)
-				history.pose(robot, t, pose.x, pose.y);
+				history.pose(robot, t, pose.x, pose.y, pose.theta);
 		});
 		send({
 			type: "poses",
@@ -199,6 +249,7 @@ const sink: FleetSink = {
 		send({ type: "plan", robot, points });
 	},
 	place(robot, at) {
+		safely("place", () => history.place(robot, Date.now(), at));
 		send({
 			type: "place",
 			robot,
