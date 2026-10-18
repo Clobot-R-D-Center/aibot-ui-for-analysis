@@ -114,13 +114,12 @@ Chrome uses **daisyUI** components; the map/data layer is **custom** (r3f / SVG)
 - **Stats** (`stats` + `stat`): the KPI strip — one bordered container with dividers; `stat-value` tabular, `stat-desc` delta in `text-success`/`text-error` + trend icon.
 - **Button** (`btn`): `btn-ghost btn-square btn-sm` for icon actions (theme toggle, map zoom/reset); `btn-primary` for the retry CTA.
 - **Select** (`select select-sm`): robot selector.
-- **Join** (`join` + `btn`): the time-range segmented control (Today / 7d / 30d), active = `btn-primary`.
 
 ### Custom (map + data — daisyUI does not cover these)
 - **Map canvas** (react-three-fiber, orthographic top-down): occupancy grid recolored to the theme (free/wall/unknown), pan/zoom, auto-fit-once (reset button re-frames; never on resize).
 - **Robot marker**: disc + heading chevron + halo, to scale, in `--robot`.
 - **Overlay layers** (toggleable via the Layers panel): **path** (drei Line, `--data-2`), **route graph** (links and node dots in quiet `--muted`: reference, not data), **zones** (outline + 14 % fill: blocked `--data-6`, slow `--data-4`, other `--data-5`; open polylines dashed; a kind legend shows while on), **coverage heatmap** (viridis DataTexture).
-- **Trend chart**: single-series SVG area+line — recessive grid, 2px non-scaling stroke, hover crosshair+tooltip, `--data-*` series, `.tnum` labels.
+- **Timeline** (sticky at the top of the body; replaces the 1/7/30-day range buttons and the trend charts): fleet distance bars (`--data-2`) and one state band per robot (run `--color-success`, idle 30 % ink, pause `--color-warning`, error `--color-error`, other 15 % ink; offline is a gap), with a state legend so color is never the only cue. Wheel zooms (10 min – 62 days), drag pans, Shift+drag selects the range the KPIs/heatmap/events use, a click sets the moment (a `--robot` line); "back to live" and double-click reset. It is a `role="slider"`: ←/→ move the moment, Esc clears.
 - **Event log**: icon + color + label rows (identity never color-alone) with tabular times.
 - **Coordinate readout / Layers panel**: floating HUD over the map.
 

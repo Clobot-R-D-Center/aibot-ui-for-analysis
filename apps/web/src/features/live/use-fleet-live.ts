@@ -8,8 +8,10 @@ import { applyMessage, type Fleet, isStale, type LiveRobot } from "./fleet";
 export const GATEWAY_URL: string =
 	import.meta.env.VITE_GATEWAY_URL ?? `ws://${location.hostname}:8787`;
 /** The gateway serves history over HTTP on the same host:port (ws→http, wss→https). */
-const GATEWAY_HTTP = GATEWAY_URL.replace(/^ws/, "http").replace(/\/$/, "");
-export const HISTORY_URL = `${GATEWAY_HTTP}/history`;
+export const GATEWAY_HTTP = GATEWAY_URL.replace(/^ws/, "http").replace(
+	/\/$/,
+	"",
+);
 /** The site map as map.yaml + map.png (see mapVersion). */
 export const MAP_URL = `${GATEWAY_HTTP}/map`;
 

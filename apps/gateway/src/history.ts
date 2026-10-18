@@ -18,8 +18,6 @@ const MIN_STEP = 0.05; // m; smaller moves are jitter, not travel
 const MAX_GAP = 5000; // ms; a longer silence starts a new segment (d = 0)
 const MAX_STEP = 5; // m per sample; more is a relocalization jump, not travel
 
-export type Days = 1 | 7 | 30;
-
 interface State {
 	online: boolean;
 	mode: Mode;
@@ -32,18 +30,6 @@ interface Change<T> {
 }
 
 // ---------- pure aggregation (unit-tested) ----------
-
-/** Uniform buckets ending at the current hour (1 day) or local day (7/30). */
-export function bucketsFor(days: Days, now: number) {
-	const size = days === 1 ? HOUR : DAY;
-	const end = new Date(now);
-	if (days === 1) end.setMinutes(0, 0, 0);
-	else end.setHours(0, 0, 0, 0);
-	const n = days === 1 ? 24 : days;
-	// ponytail: uniform DAY buckets drift an hour across DST changes; Korea has none
-	const from = end.getTime() - (n - 1) * size;
-	return { from, size, n };
-}
 
 /** [start, end) intervals of a value that changes at `rows`, clipped to [from, to). */
 export function intervals<T>(
@@ -398,7 +384,7 @@ export function openHistory(
 			"SELECT t, at FROM wait WHERE robot = ? AND t >= ? AND t < ? ORDER BY t",
 		),
 		distance: db.prepare(
-			"SELECT CAST((t - ?) / ? AS INTEGER) AS b, SUM(d) AS d FROM track WHERE robot = ? AND t >= ? AND t < ? GROUP BY b",
+			"SELECT COALESCE(SUM(d), 0) AS d FROM track WHERE robot = ? AND t >= ? AND t < ?",
 		),
 		samples: db.prepare(
 			"SELECT x, y, d FROM track WHERE robot = ? AND t >= ? AND t < ? AND session IS ? AND x IS NOT NULL ORDER BY t",
@@ -427,25 +413,11 @@ export function openHistory(
 		),
 	};
 
-	/** KPIs, trends, events and coverage of the last 1/7/30 days. */
-	function query(robot: string, days: Days, now: number) {
-		const { from, size, n } = bucketsFor(days, now);
-		// deltas against the same stretch one whole period earlier
-		return queryRange(robot, from, now, size, n * size);
-	}
-
 	/**
-	 * The same for any [from, to), in buckets of `size` ms; deltas compare with
-	 * [from − shift, to − shift) (by default the stretch just before).
+	 * KPIs, events and coverage over [from, now); deltas compare with
+	 * [from − shift, now − shift) (by default the stretch just before).
 	 */
-	function queryRange(
-		robot: string,
-		from: number,
-		now: number,
-		size: number,
-		shift = now - from,
-	) {
-		const n = Math.ceil((now - from) / size);
+	function query(robot: string, from: number, now: number, shift = now - from) {
 		const pFrom = from - shift;
 		const pTo = now - shift;
 
@@ -483,9 +455,7 @@ export function openHistory(
 		const waiting = (node: string | null) => node !== null;
 
 		const dist = (a: number, b: number) =>
-			(
-				q.distance.all(a, size, robot, a, b) as { b: number; d: number }[]
-			).reduce((s, r) => s + r.d, 0);
+			(q.distance.get(robot, a, b) as { d: number }).d;
 
 		const period = (a: number, b: number) => {
 			const on = msWhere(sIv, online, a, b);
@@ -503,19 +473,6 @@ export function openHistory(
 		};
 		const c = period(from, now);
 		const p = period(pFrom, pTo);
-
-		const perBucket = q.distance.all(from, size, robot, from, now) as {
-			b: number;
-			d: number;
-		}[];
-		const label = (t: number) => {
-			const d = new Date(t);
-			return size < DAY ? hm(d) : `${d.getMonth() + 1}/${d.getDate()}`;
-		};
-		const buckets = Array.from({ length: n }, (_, i) => {
-			const a = from + i * size;
-			return { a, b: Math.min(a + size, now), label: label(a) };
-		});
 
 		// ponytail: sweeps every sample of the range per request (fine for days of
 		// one robot); cache per day if 30-day queries of busy robots get slow.
@@ -587,22 +544,6 @@ export function openHistory(
 					delta: delta(c.wait, p.wait),
 				},
 			],
-			distance: buckets.map((bk, i) => ({
-				label: bk.label,
-				value:
-					Math.round(
-						((perBucket.find((r) => r.b === i)?.d ?? 0) / 1000) * 100,
-					) / 100,
-			})),
-			run: buckets.map((bk) => ({
-				label: bk.label,
-				value: round1(
-					pct(
-						msWhere(sIv, running, bk.a, bk.b),
-						msWhere(sIv, online, bk.a, bk.b),
-					),
-				),
-			})),
 			events,
 			/** the mapping session cells (and so coverage) are read for */
 			session: session ? { id: session.id, since: session.t } : null,
@@ -732,7 +673,6 @@ export function openHistory(
 		mapSeen,
 		markAllOffline,
 		query,
-		queryRange,
 		timeline,
 		snapshot,
 		prune,

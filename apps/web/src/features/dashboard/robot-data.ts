@@ -1,10 +1,7 @@
-import { HISTORY_URL } from "#/features/live/use-fleet-live";
+import { GATEWAY_HTTP } from "#/features/live/use-fleet-live";
 
 // The robot's history as the gateway's GET /history returns it (see
 // apps/gateway/src/history.ts), and the fetch every dashboard panel uses.
-
-export type RangeDays = 1 | 7 | 30;
-export const RANGES: RangeDays[] = [1, 7, 30];
 
 export type KpiKey =
 	| "coverage"
@@ -22,12 +19,6 @@ export interface Kpi {
 	delta: number;
 }
 
-export interface Point {
-	/** short x label, e.g. "7/3" or "14:00" */
-	label: string;
-	value: number;
-}
-
 /** Mirrors the gateway's history events (apps/gateway/src/history.ts). */
 export type EventKind =
 	| "online"
@@ -40,6 +31,8 @@ export type EventKind =
 	| "wait";
 
 export interface RobotEvent {
+	/** ms */
+	t: number;
 	time: string;
 	kind: EventKind;
 	detail: string;
@@ -50,8 +43,6 @@ export type Cell = [number, number, number];
 
 export interface RobotData {
 	kpis: Kpi[];
-	distance: Point[]; // km per bucket
-	run: Point[]; // % of online time in RUN, per bucket
 	events: RobotEvent[];
 	/** coverage cells (cell size in m) — coverage % needs the map, so the UI computes it */
 	cell: number;
@@ -65,13 +56,18 @@ export type AsyncState<T> =
 	| { status: "error"; message: string }
 	| { status: "ready"; data: T };
 
+/** KPIs (deltas against the stretch before), events and coverage over [from, to). */
 export async function fetchRobotData(
 	robotId: string,
-	days: RangeDays,
+	range: { from: number; to: number },
 	signal?: AbortSignal,
 ): Promise<RobotData> {
-	const q = new URLSearchParams({ robot: robotId, days: String(days) });
-	const res = await fetch(`${HISTORY_URL}?${q}`, { signal });
+	const q = new URLSearchParams({
+		robot: robotId,
+		from: String(Math.round(range.from)),
+		to: String(Math.round(range.to)),
+	});
+	const res = await fetch(`${GATEWAY_HTTP}/history?${q}`, { signal });
 	if (!res.ok) throw new Error(`history: HTTP ${res.status}`);
 	return res.json();
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { MAP_URL, useFleetLive } from "#/features/live/use-fleet-live";
 import {
 	type CellGrid,
@@ -8,14 +8,16 @@ import {
 } from "#/features/map/coverage";
 import { MapPanel } from "#/features/map/MapPanel";
 import { useRosMap } from "#/features/map/use-ros-map";
+import { type Range, Timeline } from "#/features/timeline/Timeline";
+import { LIVE_DAY, type Window } from "#/features/timeline/time-view";
+import { useTimeline } from "#/features/timeline/use-timeline";
 import { m } from "#/paraglide/messages.js";
 import { AsyncContent } from "./AsyncContent";
 import { EventLog } from "./EventLog";
 import { KpiStrip } from "./KpiStrip";
 import { Panel } from "./Panel";
-import type { Kpi, RangeDays, RobotData } from "./robot-data";
+import type { Kpi, RobotData } from "./robot-data";
 import { TopBar } from "./TopBar";
-import { TrendChart } from "./TrendChart";
 import { useRobotData } from "./use-robot-data";
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
@@ -34,21 +36,49 @@ function withCoverage(data: RobotData, grid: CellGrid | null): Kpi[] {
 	return [coverage, ...data.kpis];
 }
 
+/** Wall clock, ticking so a live window slides. */
+function useNow(ms: number) {
+	const [now, setNow] = useState(() => Date.now());
+	useEffect(() => {
+		const id = setInterval(() => setNow(Date.now()), ms);
+		return () => clearInterval(id);
+	}, [ms]);
+	return now;
+}
+
 export function DashboardShell() {
 	const live = useFleetLive();
-	// Only what can be shown on the map: a fleet source may also report
-	// participants that never send a pose (e.g. a central planner).
-	const robots = live.robots
-		.filter((r) => r.pose)
-		.map((r) => ({ id: r.name, name: r.name }));
 	const [picked, setPicked] = useState("");
-	// Live list arrives after first render; fall back to its first robot.
+	const now = useNow(1000);
+	// What the timeline shows; the panels follow a selection inside it, or all of it.
+	const [view, setView] = useState<Window>(LIVE_DAY);
+	const [selection, setSelection] = useState<Range | null>(null);
+	// ponytail: the moment the map will show (time travel); phase 3 wires it in
+	const [cursor, setCursor] = useState<number | null>(null);
+	const panels: Window = selection
+		? { span: selection.to - selection.from, end: selection.to }
+		: view;
+	const [buckets, setBuckets] = useState(0);
+	const onWidth = useCallback(
+		(px: number) => setBuckets(Math.min(400, Math.max(10, Math.floor(px / 4)))),
+		[],
+	);
+	const timeline = useTimeline(view, buckets);
+	// Robots to pick: the live ones with a pose (a fleet source may also report
+	// participants that never send one, e.g. a central planner), then those the
+	// timeline has records of, so history stays readable with none online.
+	const robots = [
+		...new Set([
+			...live.robots.filter((r) => r.pose).map((r) => r.name),
+			...(timeline?.robots.map((r) => r.robot) ?? []),
+		]),
+	].map((name) => ({ id: name, name }));
+	// The lists arrive after the first render; fall back to the first robot.
 	const robotId = robots.some((r) => r.id === picked)
 		? picked
 		: (robots[0]?.id ?? "");
-	const [range, setRange] = useState<RangeDays>(7);
 	// A new mapping session changes which coverage cells apply: reload then.
-	const { state, retry } = useRobotData(robotId, range, {
+	const { state, retry } = useRobotData(robotId, panels, {
 		key: live.mapSession ?? "",
 	});
 	const [mapNonce, setMapNonce] = useState(0);
@@ -59,8 +89,6 @@ export function DashboardShell() {
 	);
 
 	const ready = state.status === "ready" ? state.data : null;
-	const lastDistance = ready?.distance.at(-1)?.value ?? 0;
-	const lastRun = ready?.run.at(-1)?.value ?? 0;
 
 	const cell = ready?.cell;
 	const loaded = map.status === "ready" ? map.map : null;
@@ -76,10 +104,23 @@ export function DashboardShell() {
 
 	return (
 		<div className="flex h-[100dvh] flex-col bg-canvas text-ink">
-			<TopBar range={range} onRange={setRange} />
+			<TopBar />
 
 			<main className="min-h-0 flex-1 overflow-y-auto">
 				<div className="mx-auto flex max-w-[1600px] flex-col gap-4 p-4">
+					<Timeline
+						data={timeline}
+						now={now}
+						view={view}
+						setView={setView}
+						selection={selection}
+						setSelection={setSelection}
+						cursor={cursor}
+						setCursor={setCursor}
+						selected={robotId}
+						onWidth={onWidth}
+					/>
+
 					<AsyncContent
 						state={state}
 						onRetry={retry}
@@ -99,58 +140,6 @@ export function DashboardShell() {
 							live={live}
 							heat={heat}
 						/>
-					</div>
-
-					{/* Trends — scroll down for detail */}
-					<div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-						<Panel
-							title={m.chart_distance()}
-							action={
-								ready ? (
-									<span className="tnum text-ink text-sm tabular-nums">
-										{lastDistance} <span className="text-faint">km</span>
-									</span>
-								) : undefined
-							}
-						>
-							<AsyncContent
-								state={state}
-								onRetry={retry}
-								skeleton={<ChartSkeleton />}
-							>
-								{(data) => (
-									<TrendChart
-										points={data.distance}
-										color="var(--data-2)"
-										unit="km"
-									/>
-								)}
-							</AsyncContent>
-						</Panel>
-						<Panel
-							title={m.chart_run()}
-							action={
-								ready ? (
-									<span className="tnum text-ink text-sm tabular-nums">
-										{lastRun} <span className="text-faint">%</span>
-									</span>
-								) : undefined
-							}
-						>
-							<AsyncContent
-								state={state}
-								onRetry={retry}
-								skeleton={<ChartSkeleton />}
-							>
-								{(data) => (
-									<TrendChart
-										points={data.run}
-										color="var(--data-3)"
-										unit="%"
-									/>
-								)}
-							</AsyncContent>
-						</Panel>
 					</div>
 
 					<Panel title={m.panel_events()}>
@@ -180,10 +169,6 @@ function KpiSkeleton() {
 			))}
 		</div>
 	);
-}
-
-function ChartSkeleton() {
-	return <div className="skeleton h-[168px] w-full" />;
 }
 
 function ListSkeleton() {

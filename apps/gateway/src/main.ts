@@ -9,7 +9,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FleetSink, LoadSite, StartAdapter } from "@aibot/fleet-adapter";
 import { WebSocketServer } from "ws";
-import { type Days, openHistory } from "./history.ts";
+import { openHistory } from "./history.ts";
 import { readMap, readSite } from "./map.ts";
 
 // Settings may also come from ./.env; the shell's own variables win. Read here,
@@ -136,16 +136,8 @@ function route(path: string, p: URLSearchParams): () => unknown {
 	if (path === "/history") {
 		const robot = p.get("robot");
 		if (!robot) throw new Error("robot is required");
-		if (p.has("days")) {
-			const days = Number(p.get("days"));
-			if (days !== 1 && days !== 7 && days !== 30)
-				throw new Error("days=1|7|30");
-			return () => history.query(robot, days as Days, Date.now());
-		}
 		const { from, to } = rangeParams(p);
-		// hourly trends up to three days, daily beyond
-		const size = to - from <= 3 * DAY ? DAY / 24 : DAY;
-		return () => history.queryRange(robot, from, to, size);
+		return () => history.query(robot, from, to);
 	}
 	if (path === "/timeline") {
 		const { from, to } = rangeParams(p);
