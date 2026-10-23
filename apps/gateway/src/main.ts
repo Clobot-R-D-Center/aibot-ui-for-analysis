@@ -62,7 +62,13 @@ setInterval(() => history.prune(HISTORY_DAYS, Date.now()), 3_600_000);
 const server = http.createServer((req, res) => {
 	// The dashboard is served from another origin on the LAN.
 	res.setHeader("Access-Control-Allow-Origin", "*");
-	const url = new URL(req.url ?? "/", "http://gateway");
+	// Not new URL(): a malformed request line ("GET http://[x") would throw and
+	// kill the process.
+	const url = URL.parse(req.url ?? "/", "http://gateway");
+	if (!url) {
+		res.writeHead(400).end("bad url");
+		return;
+	}
 	if (url.pathname === "/map/site.json") {
 		if (!site) {
 			res.writeHead(404).end("no map meta");
