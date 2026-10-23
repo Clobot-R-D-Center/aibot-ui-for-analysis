@@ -82,14 +82,14 @@ test("records a morning and aggregates it", () => {
 	assert.ok(has(20, -3)); // y = -0.25 m: inside the band
 	assert.ok(!has(20, 4)); // y = 0.45 m: outside
 	assert.deepEqual(
-		r.events.map((e) => [e.time, e.kind, e.detail]),
+		r.events.map((e) => [e.t, e.kind, e.detail]),
 		[
-			["12:00", "offline", "unknown"],
-			["11:10", "state", "ERROR → IDLE"],
-			["11:00", "error", "RUN → ERROR"],
-			["11:00", "wait", "N1"],
-			["10:30", "run_start", "IDLE → RUN"],
-			["10:00", "online", "IDLE"],
+			[at(12), "offline", "unknown"],
+			[at(11, 10), "state", "ERROR → IDLE"],
+			[at(11), "error", "RUN → ERROR"],
+			[at(11), "wait", "N1"],
+			[at(10, 30), "run_start", "IDLE → RUN"],
+			[at(10), "online", "IDLE"],
 		],
 	);
 });

@@ -176,7 +176,12 @@ export function DashboardShell() {
 							skeleton={<ListSkeleton />}
 						>
 							{(data) => (
-								<EventLog events={data.events} at={cursor} onPick={setCursor} />
+								<EventLog
+									events={data.events}
+									span={panels.span}
+									at={cursor}
+									onPick={setCursor}
+								/>
 							)}
 						</AsyncContent>
 					</Panel>

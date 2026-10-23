@@ -171,9 +171,6 @@ function lerpAngle(a: number, b: number, f: number) {
 	return a + d * f;
 }
 
-const hm = (d: Date) =>
-	`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-
 // ---------- recorder + query ----------
 
 // biome-ignore lint/suspicious/noExplicitAny: SQLite rows, typed at each use
@@ -487,12 +484,7 @@ export function openHistory(
 				CELL,
 				coverRadius,
 			);
-		const time = (t: number) => {
-			const d = new Date(t);
-			return now - from <= DAY
-				? hm(d)
-				: `${d.getMonth() + 1}/${d.getDate()} ${hm(d)}`;
-		};
+		// Times as ms only: the browser shows them in its own time zone.
 		const events = [
 			...stateEvents(
 				stateBefore(from),
@@ -504,12 +496,7 @@ export function openHistory(
 		]
 			.sort((a, b) => b.t - a.t)
 			.slice(0, 50)
-			.map((e) => ({
-				t: e.t,
-				time: time(e.t),
-				kind: e.kind,
-				detail: e.detail,
-			}));
+			.map((e) => ({ t: e.t, kind: e.kind, detail: e.detail }));
 
 		return {
 			kpis: [

@@ -10,6 +10,7 @@ import {
 	WifiOff,
 } from "lucide-react";
 import type { ComponentType, CSSProperties } from "react";
+import { clock, DAY, stamp } from "#/features/timeline/time-view";
 import { m } from "#/paraglide/messages.js";
 import type { EventKind, RobotEvent } from "./robot-data";
 
@@ -52,10 +53,13 @@ const META: Record<
 /** Recorded events, newest first; picking one shows the map at that moment. */
 export function EventLog({
 	events,
+	span,
 	at = null,
 	onPick,
 }: {
 	events: RobotEvent[];
+	/** the window's length (ms): within a day, times go without the date */
+	span: number;
 	/** the moment the map shows, to mark the event there */
 	at?: number | null;
 	onPick?: (t: number) => void;
@@ -76,7 +80,7 @@ export function EventLog({
 				return (
 					<li
 						// biome-ignore lint/suspicious/noArrayIndexKey: same-minute events can repeat time+kind+detail; the list is replaced whole, never reordered
-						key={`${i}-${e.time}-${e.kind}`}
+						key={`${i}-${e.t}-${e.kind}`}
 						className="border-border/60 border-b last:border-0"
 					>
 						<button
@@ -99,7 +103,7 @@ export function EventLog({
 								<div className="text-muted text-xs">{meta.label()}</div>
 							</div>
 							<time className="tnum shrink-0 text-faint text-xs tabular-nums">
-								{e.time}
+								{span <= DAY ? clock(e.t) : stamp(e.t)}
 							</time>
 						</button>
 					</li>

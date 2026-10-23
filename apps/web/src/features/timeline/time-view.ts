@@ -88,11 +88,17 @@ export function tickLabel(t: number, step: number): string {
 	const d = new Date(t);
 	return step >= DAY || (d.getHours() === 0 && d.getMinutes() === 0)
 		? `${d.getMonth() + 1}/${d.getDate()}`
-		: `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+		: clock(t);
 }
+
+/** "14:30" */
+export const clock = (t: number) => {
+	const d = new Date(t);
+	return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 /** "10/18 14:30" */
 export const stamp = (t: number) => {
 	const d = new Date(t);
-	return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+	return `${d.getMonth() + 1}/${d.getDate()} ${clock(t)}`;
 };

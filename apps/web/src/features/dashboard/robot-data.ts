@@ -33,7 +33,6 @@ export type EventKind =
 export interface RobotEvent {
 	/** ms */
 	t: number;
-	time: string;
 	kind: EventKind;
 	detail: string;
 }
