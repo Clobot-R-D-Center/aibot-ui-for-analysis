@@ -44,6 +44,7 @@ pnpm --filter web dev             # connects to ws://<host>:8787
 | `HISTORY_DB` | `history.db` | SQLite file |
 | `HISTORY_DAYS` | `62` | retention: the 30-day view plus the previous 30 days for deltas |
 | `MAP_DIR` | the sim's world with `sim` | the site map folder: its `map.yaml` (map_server, PNG image; without `image`, `map.png`), and its meta from the adapter's `loadSite` or a `site.json` there |
+| `WEB_DIR` | | the built dashboard (`apps/web/dist`) to serve on the same port; any path that isn't the API is the app's (the Docker image sets it) |
 
 Adapters read their own settings from the environment. Settings can also go in
 a `.env` in the working directory (`apps/gateway/.env` under pnpm; git-ignored), and

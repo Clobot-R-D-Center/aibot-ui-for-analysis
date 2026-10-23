@@ -36,7 +36,7 @@ pnpm dev
 - 가상 로봇 3대가 운행·대기, 장애물 정지, 에러를 흉내 냅니다. 한 대는 주기적으로 오프라인이 됩니다.
 - 지도는 시뮬레이터 월드의 지도 폴더(`packages/adapter-sim/map`)입니다. `MAP_DIR`을 주지 않으면 이 폴더를 씁니다. 그 안의 `site.json`에 주행 그래프(노드·링크)와 영역이 있습니다.
 
-웹은 기본으로 자신이 열린 호스트의 8787 포트(`ws://<호스트>:8787`)에서 gateway를 찾습니다. gateway가 다른 PC에 있으면 `VITE_GATEWAY_URL`로 지정합니다.
+개발 서버의 웹은 기본으로 자신이 열린 호스트의 8787 포트(`ws://<호스트>:8787`)에서 gateway를 찾습니다. gateway가 다른 PC에 있으면 `VITE_GATEWAY_URL`로 지정합니다.
 
 ### 2. 실제 로봇에 연결
 
@@ -51,11 +51,37 @@ pnpm dev
    VITE_GATEWAY_URL=ws://<gateway PC 주소>:8787 pnpm --filter web dev
    ```
 
+### 3. Docker로 실행 (현장 PC 배포)
+
+웹 빌드 결과물과 gateway를 이미지 하나로 묶습니다. gateway가 웹 페이지도 같은 포트에서 제공하므로 컨테이너 하나만 실행하면 됩니다. PC에 Docker만 있으면 되고 Node.js와 pnpm은 필요 없습니다.
+
+```bash
+docker compose up -d --build
+```
+
+브라우저에서 `http://<PC 주소>:8787`을 엽니다. 설정이 없으면 시뮬레이터로 실행됩니다.
+
+실제 로봇에 연결하려면 저장소 루트에 `.env` 파일을 만들고 설정을 적은 뒤 같은 명령으로 다시 실행합니다.
+
+```bash
+FLEET_ADAPTER=<어댑터 이름>
+MAP_DIR=/home/<사용자>/maps/site-a   # 이 PC의 지도 폴더. 컨테이너 안에서는 /map으로 보입니다
+PORT=80                              # 브라우저가 여는 포트 (기본 8787)
+# 어댑터 설정(브로커 주소 등)과 HISTORY_DAYS 같은 gateway 설정도 여기에 적습니다
+```
+
+- **포트:** `PORT`로 바꿉니다. 빌드된 웹은 자신이 열린 주소(호스트:포트)에서 gateway를 찾으므로 웹 설정은 필요 없습니다. `WS_PORT`와 `HISTORY_DB`는 `compose.yaml`이 정하므로 `.env`에 적어도 쓰지 않습니다.
+- **지도:** `MAP_DIR`이 없으면 시뮬레이터는 자기 월드 지도를 쓰고, 다른 어댑터는 지도 없이 실행됩니다.
+- **이력:** 이력 DB는 Docker 볼륨 `history`에 저장됩니다. 컨테이너를 다시 만들어도 이력은 남습니다. 지우려면 `docker compose down -v`를 실행합니다.
+- **어댑터:** 이미지에는 빌드한 브랜치의 `apps/gateway/package.json`에 있는 어댑터만 들어갑니다.
+- **브로커 주소:** 컨테이너 안의 `localhost`는 PC가 아닙니다. 브로커가 같은 PC에 있으면 PC의 LAN 주소를 적습니다.
+- **다른 PC에 설치:** 인터넷이 없는 PC에는 이미지를 파일로 옮깁니다. `docker save aibot-dashboard | gzip > dashboard.tar.gz`로 저장하고, 대상 PC에서 `docker load < dashboard.tar.gz`로 불러옵니다. 대상 PC에는 `compose.yaml`과 `.env`도 필요합니다. 대상 PC에서는 `--build` 없이 `docker compose up -d`로 실행합니다.
+
 #### 네트워크
 
 | 연결 | 기본 포트 | 비고 |
 |---|---|---|
-| 브라우저 → web | 3000 | 개발 서버 |
+| 브라우저 → web | 3000 | 개발 서버. Docker에서는 gateway와 같은 포트(`PORT`, 기본 8787)에서 제공 |
 | 브라우저 → gateway | 8787 | WebSocket + HTTP (`WS_PORT`) |
 | gateway → 로봇 | 어댑터마다 다름 | 각 어댑터 README 참고 |
 
@@ -69,6 +95,7 @@ pnpm dev
 | `HISTORY_DAYS` | `62` | 이력 보관 기간(일). 타임라인을 이만큼 과거로 이동할 수 있습니다. 30일 구간과 그 직전 30일 비교를 위해 62일 |
 | `MAP_DIR` | (없음) | 현장 지도 폴더. 그 안의 `map.yaml`(map_server 형식, PNG 이미지)을 지도로 씁니다. 지도는 이 폴더에서만 옵니다. 노드·링크·영역은 어댑터의 로더(`loadSite`)나 폴더 안의 `site.json`에서 읽습니다. 시뮬레이터는 기본으로 자기 월드 지도를 씁니다 |
 | `COVER_RADIUS` | `0.35` | 커버리지 계산에 쓰는 로봇 반경(m). 로봇이 지나가며 쓸고 간 폭의 절반입니다 |
+| `WEB_DIR` | (없음) | 웹 빌드 결과물 폴더(`apps/web/dist`). 지정하면 gateway가 웹 페이지도 같은 포트에서 제공합니다. Docker 이미지는 이 값을 설정해 둡니다 |
 
 ## 이력과 KPI
 
@@ -116,6 +143,8 @@ pnpm --filter gateway test
 ├── packages/
 │   ├── fleet-adapter/          # 어댑터 인터페이스와 작성 안내
 │   └── adapter-sim/            # 시뮬레이터 어댑터 (기본값, 참고 구현)
+├── Dockerfile                  # 웹 빌드 + gateway를 묶은 이미지
+├── compose.yaml                # Docker 실행 설정
 ├── package.json                # 공통 스크립트
 ├── pnpm-workspace.yaml         # 워크스페이스 설정
 └── turbo.json                  # 터보레포 파이프라인 설정

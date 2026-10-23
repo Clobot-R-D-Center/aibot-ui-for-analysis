@@ -1,0 +1,7 @@
+.git
+**/node_modules
+**/dist
+**/.turbo
+**/*.db*
+# vite also reads .env.local, .env.production…: a dev gateway URL must not be baked in
+**/.env*

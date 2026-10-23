@@ -3,14 +3,15 @@
 // it live to browsers over a WebSocket on the same port, in one neutral
 // protocol (see LiveMessage) — so the UI never knows which robots it shows.
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import http from "node:http";
-import { dirname } from "node:path";
+import { dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FleetSink, LoadSite, StartAdapter } from "@aibot/fleet-adapter";
 import { WebSocketServer } from "ws";
 import { openHistory } from "./history.ts";
 import { readMap, readSite } from "./map.ts";
+import { MIME, webFile } from "./web.ts";
 
 // Settings may also come from ./.env; the shell's own variables win. Read here,
 // not via node --env-file, so a packaged binary (SEA, pkg) reads it too.
@@ -24,13 +25,16 @@ const ADAPTER = process.env.FLEET_ADAPTER ?? "sim";
 // The site map: a folder with a map_server map.yaml + PNG and its meta. The
 // simulator's world is such a folder of its own, so the sim runs with no settings.
 // ponytail: a sim-only default in the core; goes once maps load per format
+// An empty MAP_DIR is unset too (compose passes one when none is given).
 const MAP_DIR =
-	process.env.MAP_DIR ??
+	process.env.MAP_DIR ||
 	(ADAPTER === "sim"
 		? dirname(
 				fileURLToPath(import.meta.resolve("@aibot/adapter-sim/map/map.yaml")),
 			)
 		: undefined);
+// The built dashboard (apps/web/dist) to serve on this port too; the Docker image sets it.
+const WEB_DIR = process.env.WEB_DIR;
 if (process.env.MAP_FILE)
 	console.warn(
 		"[gateway] MAP_FILE is no longer read: set MAP_DIR to the folder holding map.yaml",
@@ -101,7 +105,21 @@ const server = http.createServer((req, res) => {
 	try {
 		answer = route(url.pathname, url.searchParams);
 	} catch (e) {
-		res.writeHead((e as HttpError).status ?? 400).end((e as Error).message);
+		const status = (e as HttpError).status ?? 400;
+		// Not the API: with WEB_DIR, the dashboard itself.
+		const file =
+			status === 404 && WEB_DIR ? webFile(WEB_DIR, url.pathname) : null;
+		if (file) {
+			res.writeHead(200, {
+				"Content-Type": MIME[extname(file)] ?? "application/octet-stream",
+			});
+			// Unhandled, a read error (the build replaced meanwhile) kills the process.
+			createReadStream(file)
+				.on("error", () => res.destroy())
+				.pipe(res);
+			return;
+		}
+		res.writeHead(status).end((e as Error).message);
 		return;
 	}
 	try {

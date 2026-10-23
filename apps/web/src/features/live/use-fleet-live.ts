@@ -2,11 +2,16 @@ import { useEffect, useState } from "react";
 import { applyMessage, type Fleet, isStale, type LiveRobot } from "./fleet";
 
 /**
- * Gateway WebSocket (apps/gateway). Defaults to port 8787 on the host the
- * dashboard is served from, so a gateway on the same machine needs no config.
+ * Gateway WebSocket (apps/gateway). A build is served by the gateway itself
+ * (WEB_DIR, the Docker image), so it's the page's own host:port, whatever port
+ * that is; the dev server looks on port 8787 of its host, so a gateway on the
+ * same machine needs no config.
  */
 export const GATEWAY_URL: string =
-	import.meta.env.VITE_GATEWAY_URL ?? `ws://${location.hostname}:8787`;
+	import.meta.env.VITE_GATEWAY_URL ??
+	(import.meta.env.DEV
+		? `ws://${location.hostname}:8787`
+		: `${location.protocol.replace("http", "ws")}//${location.host}`);
 /** The gateway serves history over HTTP on the same host:port (ws→http, wss→https). */
 export const GATEWAY_HTTP = GATEWAY_URL.replace(/^ws/, "http").replace(
 	/\/$/,

@@ -1,0 +1,22 @@
+# docker compose up -d --build → http://<this PC>:8787 (README: Docker)
+services:
+  dashboard:
+    build: .
+    image: aibot-dashboard # the name docker save / load moves it by
+    # PORT: what browsers open; the page finds the gateway where it came from.
+    ports: ["${PORT:-8787}:8787"]
+    # FLEET_ADAPTER, the adapter's own settings, HISTORY_DAYS, …
+    env_file: [{ path: .env, required: false }]
+    # Set here, not by .env: they must match the port and the volume below.
+    environment:
+      WS_PORT: 8787
+      HISTORY_DB: /data/history.db
+      # MAP_DIR in .env is this PC's map folder; empty without one, so the
+      # simulator uses its own world and another adapter shows no map.
+      MAP_DIR: ${MAP_DIR:+/map}
+    volumes:
+      - ${MAP_DIR:-./packages/adapter-sim/map}:/map:ro # unused without MAP_DIR
+      - history:/data
+    restart: unless-stopped
+volumes:
+  history:
