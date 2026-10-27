@@ -6,6 +6,8 @@ AI 서비스 로봇의 위치, 운행 상태, 이력을 지도 위에서 보고 
 - **gateway** (`apps/gateway`): 로봇 함대와 대시보드 사이에서 동작하는 작은 LAN 서비스입니다. 실시간 데이터를 중계하고 이력을 기록합니다.
 - **어댑터** (`packages/adapter-*`): 로봇 스택(통신 방식, 토픽, 메시지 형식)마다 하나씩 둡니다. 로봇 스택에 대한 지식은 어댑터 안에만 있습니다.
 
+![시뮬레이터 로봇 3대의 7일 이력: 실시간 위치와 커버리지 히트맵, 타임라인에서 과거 시각을 골라 그때의 위치를 보는 모습](docs/demo.gif)
+
 ## 구조
 
 ```text
@@ -122,6 +124,7 @@ pnpm test                 # 모든 패키지 테스트
 pnpm build
 pnpm format-and-lint
 pnpm format-and-lint:fix
+node scripts/demo/make-gif.mts   # docs/demo.gif 다시 찍기 (google-chrome, ffmpeg 필요, pnpm dev는 멈춘 뒤)
 ```
 
 패키지별:
@@ -143,6 +146,8 @@ pnpm --filter gateway test
 ├── packages/
 │   ├── fleet-adapter/          # 어댑터 인터페이스와 작성 안내
 │   └── adapter-sim/            # 시뮬레이터 어댑터 (기본값, 참고 구현)
+├── docs/                       # README 이미지
+├── scripts/demo/               # docs/demo.gif 촬영 (시뮬레이터 이력 생성 + 헤드리스 Chrome 녹화)
 ├── Dockerfile                  # 웹 빌드 + gateway를 묶은 이미지
 ├── compose.yaml                # Docker 실행 설정
 ├── package.json                # 공통 스크립트
