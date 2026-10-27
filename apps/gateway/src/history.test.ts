@@ -5,7 +5,14 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import type { Mode } from "@aibot/fleet-adapter";
-import { intervals, msWhere, openHistory, sweptCells } from "./history.ts";
+import {
+	CELL,
+	COVER_RADIUS,
+	intervals,
+	msWhere,
+	openHistory,
+	sweptCells,
+} from "./history.ts";
 
 const at = (h: number, m = 0, s = 0) => new Date(2026, 9, 6, h, m, s).getTime();
 
@@ -191,6 +198,68 @@ test("coverage sweeps the robot's width along its path, counting passes", () => 
 		r,
 	);
 	assert.ok(!gap.some(([x, y]) => x === 10 && y === 0));
+});
+
+test("coverage over whole days, kept per day, matches one sweep and follows new rows", () => {
+	const file = join(mkdtempSync(join(tmpdir(), "hist-")), "h.db");
+	const h = openHistory(file, at(9));
+	const robot = "robot-a";
+	const day = (d: number, hour: number, min = 0) =>
+		Date.UTC(2026, 9, d, hour, min);
+	h.state(robot, day(5, 0), { online: true, mode: "run", label: "RUN" });
+	h.mapSeen(day(5, 0), "file-a");
+	// laps of a 3 m circle every 5 s (joined), across UTC midnights
+	const drive = (from: number, to: number) => {
+		for (let t = from; t < to; t += 5000) {
+			const a = t / 20_000;
+			h.pose(robot, t, 3 * Math.cos(a), 3 * Math.sin(a), a);
+		}
+	};
+	drive(day(6, 23, 50), day(7, 0, 10));
+	drive(day(7, 12), day(7, 12, 10)); // after a gap: starts unjoined
+	drive(day(7, 23, 55), day(8, 0, 10));
+
+	// what one sweep over the window's rows gives, the first continuing the
+	// row before the window
+	const db = new DatabaseSync(file, { readOnly: true });
+	const rows = (where: string, ...p: number[]) =>
+		db.prepare(`SELECT x, y, d FROM track WHERE ${where}`).all(...p) as {
+			x: number;
+			y: number;
+			d: number;
+		}[];
+	const same = (a: number, b: number) =>
+		assert.deepEqual(
+			h.query(robot, a, b).cells,
+			sweptCells(
+				rows("t >= ? AND t < ? ORDER BY t", a, b).map((r) => ({
+					x: r.x,
+					y: r.y,
+					joined: r.d > 0,
+				})),
+				CELL,
+				COVER_RADIUS,
+				rows("t < ? ORDER BY t DESC LIMIT 1", a)[0] ?? null,
+			),
+		);
+
+	same(day(6, 23), day(8, 0, 5)); // part of day 6, whole day 7, minutes of day 8
+	// whole days 7 and 8: day 8 kept while it can still get rows (a window
+	// reaching past now)
+	same(day(6, 23), day(9, 1));
+	same(day(6, 23), day(9, 1)); // kept
+	same(day(7, 0, 5), day(9, 1)); // starting mid-drive
+	same(day(8, 0), day(9, 1)); // from midnight: day 8 continues day 7
+	same(day(8, 0), day(8, 0, 5));
+	assert.ok(
+		h.query(robot, day(6, 23), day(9, 1)).cells.some(([, , n]) => n > 1),
+	);
+
+	drive(day(8, 9), day(8, 9, 5)); // into the day just kept
+	same(day(6, 23), day(9, 1));
+
+	h.prune(62, day(8, 0) + 62 * 86_400_000); // up to midnight: day 8 continues nothing
+	same(day(8, 0), day(9, 1));
 });
 
 test("a snapshot shows each robot as it was at that moment", () => {

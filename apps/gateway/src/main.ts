@@ -149,7 +149,9 @@ function msParam(p: URLSearchParams, name: string): number {
  */
 function rangeParams(p: URLSearchParams) {
 	const from = Math.max(msParam(p, "from"), Date.now() - HISTORY_DAYS * DAY);
-	const to = msParam(p, "to");
+	// Nothing is recorded ahead of now; a day of slack for a browser's clock.
+	// Unbounded, every day up to `to` is swept and kept (history.ts sweptDays).
+	const to = Math.min(msParam(p, "to"), Date.now() + DAY);
 	if (!(from < to))
 		throw new Error(`need from < to, within the last ${HISTORY_DAYS} days`);
 	return { from, to };

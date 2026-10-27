@@ -119,19 +119,56 @@ export function stateEvents(
  * Cells a robot of `radius` swept along consecutive samples: each segment
  * between joined samples is a capsule (all cells whose center is within
  * `radius` of it), an unjoined sample a disk. n counts passes — segments —
- * over a cell, not samples.
+ * over a cell, not samples. `prev` is the sample before these, which a joined
+ * first one continues.
  */
 export function sweptCells(
-	samples: { x: number; y: number; joined: boolean }[],
+	samples: Sample[],
 	cell: number,
 	radius: number,
+	prev: Point | null = null,
 ): [number, number, number][] {
-	const passes = new Map<string, [number, number, number]>();
+	return sweep(emptyPasses(), samples, cell, radius, prev).list;
+}
+
+type Point = { x: number; y: number };
+type Sample = Point & { joined: boolean };
+type Cell = [cx: number, cy: number, n: number];
+/**
+ * Pass counts: the cells in first-pass order, and each by cx then cy (two
+ * small-integer lookups: ~2× faster than a string key, right at any distance).
+ */
+type Passes = { list: Cell[]; at: Map<number, Map<number, Cell>> };
+const emptyPasses = (): Passes => ({ list: [], at: new Map() });
+
+function pass(p: Passes, cx: number, cy: number, n: number) {
+	let col = p.at.get(cx);
+	if (!col) {
+		col = new Map();
+		p.at.set(cx, col);
+	}
+	const hit = col.get(cy);
+	if (hit) hit[2] += n;
+	else {
+		const c: Cell = [cx, cy, n];
+		col.set(cy, c);
+		p.list.push(c);
+	}
+}
+
+/** sweptCells, adding to the counts in `p`. */
+function sweep(
+	p: Passes,
+	samples: Sample[],
+	cell: number,
+	radius: number,
+	prev: Point | null,
+): Passes {
 	const r2 = radius * radius;
-	let prev: { x: number; y: number } | null = null;
 	for (const s of samples) {
 		const a = s.joined && prev ? prev : s;
-		const [dx, dy] = [s.x - a.x, s.y - a.y];
+		const dx = s.x - a.x;
+		const dy = s.y - a.y;
 		const len2 = dx * dx + dy * dy;
 		const c0 = Math.floor((Math.min(a.x, s.x) - radius) / cell);
 		const c1 = Math.floor((Math.max(a.x, s.x) + radius) / cell);
@@ -148,14 +185,11 @@ export function sweptCells(
 				const ex = px - (a.x + k * dx);
 				const ey = py - (a.y + k * dy);
 				if (ex * ex + ey * ey > r2) continue;
-				const key = `${cx},${cy}`;
-				const hit = passes.get(key);
-				if (hit) hit[2]++;
-				else passes.set(key, [cx, cy, 1]);
+				pass(p, cx, cy, 1);
 			}
 		prev = s;
 	}
-	return [...passes.values()];
+	return p;
 }
 
 /** The change-only key of a graph place: "n:<node>", "l:<link>" or "" (unknown). */
@@ -317,6 +351,11 @@ export function openHistory(
 			y,
 			Number.isFinite(theta) ? theta : null,
 		);
+		// A day already swept that this row falls in (a window reaching past now
+		// sweeps days still to come), and the ones after: sweep them again.
+		const days = sweptDays.get(robot);
+		if (days)
+			for (const day of days.keys()) if (day + DAY > t) days.delete(day);
 	}
 
 	/**
@@ -334,6 +373,7 @@ export function openHistory(
 		if (id !== session?.id) {
 			session = { id, t };
 			ins.session.run(id, t, null, null);
+			sweptDays.clear(); // cells of the old session are never read again
 		}
 		return id;
 	}
@@ -386,6 +426,9 @@ export function openHistory(
 		samples: db.prepare(
 			"SELECT x, y, d FROM track WHERE robot = ? AND t >= ? AND t < ? AND session IS ? AND x IS NOT NULL ORDER BY t",
 		),
+		sampleBefore: db.prepare(
+			"SELECT x, y FROM track WHERE robot = ? AND t < ? AND session IS ? AND x IS NOT NULL ORDER BY t DESC LIMIT 1",
+		),
 		robots: db.prepare("SELECT DISTINCT robot FROM state ORDER BY robot"),
 		fleetDistance: db.prepare(
 			"SELECT CAST((t - ?) / ? AS INTEGER) AS b, SUM(d) AS d FROM track WHERE t >= ? AND t < ? GROUP BY b",
@@ -409,6 +452,81 @@ export function openHistory(
 			"SELECT id FROM map_session WHERE t <= ? ORDER BY t DESC LIMIT 1",
 		),
 	};
+
+	/** The current session's samples of a robot over [a, b). */
+	const samples = (robot: string, a: number, b: number): Sample[] =>
+		(q.samples.all(robot, a, b, session?.id ?? null) as Row[]).map((r) => ({
+			x: r.x,
+			y: r.y,
+			// d > 0: continues the previous sample (no gap, no jump)
+			joined: r.d > 0,
+		}));
+	const sampleBefore = (robot: string, t: number): Point | null => {
+		const r = q.sampleBefore.get(robot, t, session?.id ?? null) as Row;
+		return r ? { x: r.x, y: r.y } : null; // one object shape for sweep
+	};
+
+	/**
+	 * Cells each robot swept per whole UTC day (start ms → flat [cx, cy, n, …])
+	 * in the current session: a past day doesn't change, so a range only sweeps
+	 * its partial first and last days.
+	 * ponytail: at most a floor's cells per robot and kept day, 12 B each
+	 * (1000 m² → 1.2 MB a day); keep weeks too if robots covering that much
+	 * new ground every day make it big.
+	 */
+	const sweptDays = new Map<string, Map<number, Int32Array>>();
+
+	/**
+	 * Coverage cells of a robot over [a, b) in the current session. Each sample
+	 * counts the segment it ends, the first one too (from a sample just before
+	 * `a`), so a range split into days adds up to the same as one sweep.
+	 */
+	function swept(robot: string, a: number, b: number) {
+		const first = Math.ceil(a / DAY) * DAY;
+		const end = Math.floor(b / DAY) * DAY;
+		if (first >= end)
+			return sweptCells(
+				samples(robot, a, b),
+				CELL,
+				coverRadius,
+				sampleBefore(robot, a),
+			);
+		let days = sweptDays.get(robot);
+		if (!days) {
+			days = new Map();
+			sweptDays.set(robot, days);
+		}
+		const p = sweep(
+			emptyPasses(),
+			samples(robot, a, first),
+			CELL,
+			coverRadius,
+			sampleBefore(robot, a),
+		);
+		for (let day = first; day < end; day += DAY) {
+			let cells = days.get(day);
+			if (!cells) {
+				const own = sweep(
+					emptyPasses(),
+					samples(robot, day, day + DAY),
+					CELL,
+					coverRadius,
+					sampleBefore(robot, day),
+				);
+				cells = Int32Array.from(own.list.flat());
+				days.set(day, cells);
+			}
+			for (let i = 0; i < cells.length; i += 3)
+				pass(p, cells[i], cells[i + 1], cells[i + 2]);
+		}
+		return sweep(
+			p,
+			samples(robot, end, b),
+			CELL,
+			coverRadius,
+			sampleBefore(robot, end),
+		).list;
+	}
 
 	/**
 	 * KPIs, events and coverage over [from, now); deltas compare with
@@ -471,19 +589,6 @@ export function openHistory(
 		const c = period(from, now);
 		const p = period(pFrom, pTo);
 
-		// ponytail: sweeps every sample of the range per request (fine for days of
-		// one robot); cache per day if 30-day queries of busy robots get slow.
-		const swept = (a: number, b: number) =>
-			sweptCells(
-				(q.samples.all(robot, a, b, session?.id ?? null) as Row[]).map((r) => ({
-					x: r.x,
-					y: r.y,
-					// d > 0: continues the previous sample (no gap, no jump)
-					joined: r.d > 0,
-				})),
-				CELL,
-				coverRadius,
-			);
 		// Times as ms only: the browser shows them in its own time zone.
 		const events = [
 			...stateEvents(
@@ -535,8 +640,8 @@ export function openHistory(
 			/** the mapping session cells (and so coverage) are read for */
 			session: session ? { id: session.id, since: session.t } : null,
 			cell: CELL,
-			cells: swept(from, now),
-			prevCells: swept(pFrom, pTo).map(([cx, cy]) => [cx, cy]),
+			cells: swept(robot, from, now),
+			prevCells: swept(robot, pFrom, pTo).map(([cx, cy]) => [cx, cy]),
 		};
 	}
 
@@ -644,6 +749,10 @@ export function openHistory(
 	function prune(keepDays: number, now: number) {
 		const cut = now - keepDays * DAY;
 		db.prepare("DELETE FROM track WHERE t < ?").run(cut);
+		// Days cut into, and a day whose first sample continues a deleted one
+		// (joined samples are at most MAX_GAP apart).
+		for (const days of sweptDays.values())
+			for (const day of days.keys()) if (day < cut + MAX_GAP) days.delete(day);
 		// state/wait/place rows are transitions: the last one before the cutoff still
 		// says what held from the cutoff on, so it stays.
 		for (const table of ["state", "wait", "place"])
